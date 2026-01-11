@@ -1,0 +1,5 @@
+@import "tailwindcss";
+
+.custom-hamburger-button {
+    border-radius: 10px;
+}
