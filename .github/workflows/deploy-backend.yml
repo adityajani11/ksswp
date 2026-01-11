@@ -2,7 +2,7 @@ name: Deploy Backend
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
     paths:
       - "server/**"
 
@@ -24,6 +24,7 @@ jobs:
             set -e
             cd /home/ubuntu/app || exit 1
 
+            echo "Pulling latest code..."
             if [ ! -d ".git" ]; then
               git clone https://github.com/adityajani11/ksswp.git .
             else
@@ -31,5 +32,13 @@ jobs:
             fi
 
             cd server
+
+            echo "Installing backend dependencies..."
             npm install --production
-            pm2 restart all || pm2 start index.js --name api
+
+            echo "Starting / Restarting backend with PM2..."
+            pm2 describe api > /dev/null \
+              && pm2 restart api \
+              || pm2 start npm --name api -- start
+
+            pm2 save
