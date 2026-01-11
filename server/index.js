@@ -17,6 +17,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/contacts", contactRoutes);
 app.use("/api/whatsapp", whatsappRoutes);
 
+// Connect with Database
 connectDB();
 
 app.listen(process.env.PORT, () =>
