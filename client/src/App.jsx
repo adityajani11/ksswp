@@ -25,7 +25,7 @@ export default function App() {
           <Route path="send" element={<SendMessages />} />
         </Route>
 
-        {/* FALLBACK */}
+        {/* FALLBACK PATH */}
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </BrowserRouter>
