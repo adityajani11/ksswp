@@ -81,7 +81,7 @@ export default function Sidebar() {
 
         {/* Menu */}
         <nav className="p-3 space-y-2 flex-1">
-          <NavLink
+          {/* <NavLink
             to="/dashboard"
             end
             className={linkStyle}
@@ -89,15 +89,24 @@ export default function Sidebar() {
           >
             <Users size={18} />
             <span className="font-medium">Manage Contacts</span>
-          </NavLink>
+          </NavLink> */}
 
-          <NavLink
+          {/* <NavLink
             to="/dashboard/send"
             className={linkStyle}
             onClick={() => setOpen(false)}
           >
             <Send size={18} />
             <span className="font-medium">Send Messages</span>
+          </NavLink> */}
+
+          <NavLink
+            to="/dashboard/groups"
+            className={linkStyle}
+            onClick={() => setOpen(false)}
+          >
+            <Users size={18} />
+            <span className="font-medium">Groups</span>
           </NavLink>
         </nav>
 
