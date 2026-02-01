@@ -23,7 +23,8 @@ export default function App() {
             </ProtectedRoute>
           }
         >
-          <Route index element={<ManageContacts />} />
+          {/* <Route index element={<ManageContacts />} /> */}
+          <Route index element={<Groups />} />
           <Route path="send" element={<SendMessages />} />
           <Route path="groups" element={<Groups />} />
           <Route path="groups/:id" element={<GroupDetails />} />
