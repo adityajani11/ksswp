@@ -14,7 +14,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// All Routes
+// Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/contacts", contactRoutes);
 app.use("/api/whatsapp", whatsappRoutes);
