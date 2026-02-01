@@ -29,7 +29,8 @@ jobs:
             if [ ! -d ".git" ]; then
               git clone https://github.com/adityajani11/ksswp.git .
             else
-              git pull origin main
+              git fetch origin
+              git reset --hard origin/main
             fi
 
             cd server
