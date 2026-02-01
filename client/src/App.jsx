@@ -3,6 +3,8 @@ import LoginPage from "./pages/LoginPage";
 import Dashboard from "./pages/Dashboard";
 import ManageContacts from "./pages/ManageContacts";
 import SendMessages from "./pages/SendMessages";
+import Groups from "./pages/Groups";
+import GroupDetails from "./pages/GroupDetails";
 import ProtectedRoute from "./routes/ProtectedRoute";
 
 export default function App() {
@@ -23,6 +25,8 @@ export default function App() {
         >
           <Route index element={<ManageContacts />} />
           <Route path="send" element={<SendMessages />} />
+          <Route path="groups" element={<Groups />} />
+          <Route path="groups/:id" element={<GroupDetails />} />
         </Route>
 
         {/* FALLBACK PATH */}

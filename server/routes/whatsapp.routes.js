@@ -14,12 +14,12 @@ const router = express.Router();
 router.post("/template/text", auth, sendTextTemplateMessage);
 
 // IMAGE TEMPLATE (link based)
-// router.post("/template/image", sendImageTemplate);
+router.post("/template/image", sendImageTemplate);
 
 // VIDEO TEMPLATE (link based)
-// router.post("/template/video", sendVideoTemplate);
+router.post("/template/video", sendVideoTemplate);
 
 // DOCUMENT TEMPLATE (link based)
-// router.post("/template/document", sendDocumentTemplate);
+router.post("/template/document", sendDocumentTemplate);
 
 module.exports = router;

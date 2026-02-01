@@ -43,6 +43,31 @@ export default function SendMessages() {
     }
   };
 
+  const uploadToS3AndGetLink = async (file, category) => {
+    const res = await api.post("/upload/signed-url", {
+      fileName: file.name,
+      contentType: file.type,
+      category,
+    });
+
+    const { uploadUrl, publicUrl } = res.data;
+
+    // MUST use uploadUrl here
+    const uploadRes = await fetch(uploadUrl, {
+      method: "PUT",
+      headers: {
+        "Content-Type": file.type,
+      },
+      body: file,
+    });
+
+    if (!uploadRes.ok) {
+      throw new Error("S3 upload failed");
+    }
+
+    return publicUrl; // ONLY return this
+  };
+
   const sendToContacts = async (numbers, type) => {
     if (!numbers.length) {
       Swal.fire("No contacts selected", "", "warning");
@@ -65,17 +90,25 @@ export default function SendMessages() {
         }
 
         if (type === "media") {
-          const form = new FormData();
-          form.append("to", to);
-          form.append("file", media);
-          await api.post("/whatsapp/template/image", form);
+          const link = await uploadToS3AndGetLink(media, "image");
+
+          for (const to of numbers) {
+            await api.post("/whatsapp/template/image", {
+              to,
+              link,
+              text: text || " ",
+            });
+          }
         }
 
         if (type === "doc") {
-          const form = new FormData();
-          form.append("to", to);
-          form.append("file", doc);
-          await api.post("/whatsapp/template/document", form);
+          const link = await uploadToS3AndGetLink(doc, "document");
+
+          await api.post("/whatsapp/template/document", {
+            to,
+            link,
+            text: text || " ", // required
+          });
         }
       }
 
@@ -197,7 +230,7 @@ export default function SendMessages() {
       </div>
 
       {/* MEDIA MESSAGE */}
-      {/* <div className="bg-white border rounded-xl p-5 space-y-3 shadow-sm">
+      <div className="bg-white border rounded-xl p-5 space-y-3 shadow-sm">
         <div className="flex items-center gap-2 text-gray-700 font-medium">
           <Image size={18} />
           Photo / Video
@@ -205,9 +238,19 @@ export default function SendMessages() {
 
         <input
           type="file"
-          accept="image/*,video/*"
-          onChange={(e) => setMedia(e.target.files[0])}
-          className="block w-full text-sm"
+          accept="image/*"
+          onChange={(e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            if (file.size > 5 * 1024 * 1024) {
+              Swal.fire("Image too large", "Max 5MB allowed", "warning");
+              e.target.value = ""; // reset input
+              return;
+            }
+
+            setMedia(file);
+          }}
         />
 
         <div className="text-right">
@@ -219,10 +262,10 @@ export default function SendMessages() {
             Send Media
           </button>
         </div>
-      </div> */}
+      </div>
 
       {/* DOCUMENT MESSAGE */}
-      {/* <div className="bg-white border rounded-xl p-5 space-y-3 shadow-sm">
+      <div className="bg-white border rounded-xl p-5 space-y-3 shadow-sm">
         <div className="flex items-center gap-2 text-gray-700 font-medium">
           <FileText size={18} />
           Document
@@ -231,8 +274,18 @@ export default function SendMessages() {
         <input
           type="file"
           accept=".pdf,.doc,.docx"
-          onChange={(e) => setDoc(e.target.files[0])}
-          className="block w-full text-sm"
+          onChange={(e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            if (file.size > 100 * 1024 * 1024) {
+              Swal.fire("File too large", "Max 100MB allowed", "warning");
+              e.target.value = "";
+              return;
+            }
+
+            setDoc(file);
+          }}
         />
 
         <div className="text-right">
@@ -244,7 +297,7 @@ export default function SendMessages() {
             Send Document
           </button>
         </div>
-      </div> */}
+      </div>
       {showContactModal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
           <div className="bg-white w-full max-w-lg rounded-xl p-5 shadow-lg">
