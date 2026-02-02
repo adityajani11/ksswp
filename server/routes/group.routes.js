@@ -96,7 +96,7 @@ router.put("/:id", async (req, res) => {
   const group = await Group.findByIdAndUpdate(
     req.params.id,
     { name: name.trim() },
-    { new: true }
+    { new: true },
   );
 
   if (!group) {
@@ -134,7 +134,7 @@ router.put("/:groupId/contacts/:phone", async (req, res) => {
 
   // prevent duplicate phone
   const duplicate = group.contacts.some(
-    (c) => c.phone === formattedPhone && c.phone !== req.params.phone
+    (c) => c.phone === formattedPhone && c.phone !== req.params.phone,
   );
 
   if (duplicate) {

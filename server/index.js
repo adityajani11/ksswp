@@ -4,7 +4,6 @@ const cors = require("cors");
 const connectDB = require("./db");
 
 const authRoutes = require("./routes/auth.routes");
-const contactRoutes = require("./routes/contact.routes");
 const whatsappRoutes = require("./routes/whatsapp.routes");
 const uploadRoutes = require("./routes/upload.routes");
 const groupRoutes = require("./routes/group.routes");
@@ -16,7 +15,6 @@ app.use(express.json());
 
 // All Routes
 app.use("/api/auth", authRoutes);
-app.use("/api/contacts", contactRoutes);
 app.use("/api/whatsapp", whatsappRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/groups", groupRoutes);

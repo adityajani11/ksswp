@@ -1,158 +1,39 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import Swal from "sweetalert2";
 import api from "../utils/api";
-import { Send, Image, FileText } from "lucide-react";
+import { Send, ChevronDown, ChevronRight, Search } from "lucide-react";
 
-export default function SendMessages() {
+export default function SendGroupMessages() {
+  /* ---------------- STATE ---------------- */
   const [text, setText] = useState("");
-  const [media, setMedia] = useState(null);
-  const [doc, setDoc] = useState(null);
-  const [contacts, setContacts] = useState([]);
-  const [showContactModal, setShowContactModal] = useState(false);
-  const [selectedContacts, setSelectedContacts] = useState([]);
-  const [pendingType, setPendingType] = useState(null);
-  const [modalSearch, setModalSearch] = useState("");
+  const [groups, setGroups] = useState([]);
 
+  const [showGroupModal, setShowGroupModal] = useState(false);
+
+  const [selectedGroups, setSelectedGroups] = useState([]); // groupIds
+  const [selectedContacts, setSelectedContacts] = useState([]); // phone numbers
+  const [manuallyDeselected, setManuallyDeselected] = useState([]); // phones
+
+  const [expandedGroups, setExpandedGroups] = useState([]); // groupIds
+  const [search, setSearch] = useState("");
+
+  /* ---------------- FETCH GROUPS ---------------- */
   useEffect(() => {
-    api.get("/contacts").then((res) => setContacts(res.data));
+    api.get("/groups").then((res) => {
+      setGroups(Array.isArray(res.data) ? res.data : []);
+    });
   }, []);
 
-  const confirmSend = async (type) => {
-    setPendingType(type);
-
-    const choice = await Swal.fire({
-      title: "Send Message",
-      text: "Choose recipients",
-      icon: "question",
-      showCancelButton: true,
-      showDenyButton: true,
-      confirmButtonText: "Send to All",
-      denyButtonText: "Send to Specific",
-    });
-
-    if (choice.isConfirmed) {
-      sendToContacts(
-        contacts.map((c) => c.phone),
-        type
-      );
-    }
-
-    if (choice.isDenied) {
-      setSelectedContacts([]);
-      setShowContactModal(true);
-    }
-  };
-
-  const uploadToS3AndGetLink = async (file, category) => {
-    const res = await api.post("/upload/signed-url", {
-      fileName: file.name,
-      contentType: file.type,
-      category,
-    });
-
-    const { uploadUrl, publicUrl } = res.data;
-
-    // MUST use uploadUrl here
-    const uploadRes = await fetch(uploadUrl, {
-      method: "PUT",
-      headers: {
-        "Content-Type": file.type,
-      },
-      body: file,
-    });
-
-    if (!uploadRes.ok) {
-      throw new Error("S3 upload failed");
-    }
-
-    return publicUrl; // ONLY return this
-  };
-
-  const sendToContacts = async (numbers, type) => {
-    if (!numbers.length) {
-      Swal.fire("No contacts selected", "", "warning");
-      return;
-    }
-
-    const ok = await Swal.fire({
-      title: "Confirm Send?",
-      text: `Send message to ${numbers.length} contacts?`,
-      icon: "warning",
-      showCancelButton: true,
-    });
-
-    if (!ok.isConfirmed) return;
-
-    try {
-      for (const to of numbers) {
-        if (type === "text") {
-          await api.post("/whatsapp/template/text", { to, text });
-        }
-
-        if (type === "media") {
-          const link = await uploadToS3AndGetLink(media, "image");
-
-          for (const to of numbers) {
-            await api.post("/whatsapp/template/image", {
-              to,
-              link,
-              text: text || " ",
-            });
-          }
-        }
-
-        if (type === "doc") {
-          const link = await uploadToS3AndGetLink(doc, "document");
-
-          await api.post("/whatsapp/template/document", {
-            to,
-            link,
-            text: text || " ", // required
-          });
-        }
-      }
-
-      Swal.fire("Sent!", "Messages sent successfully", "success");
-      // CLEAR INPUTS AFTER SUCCESS
-      if (type === "text") {
-        setText("");
-      }
-
-      if (type === "media") {
-        setMedia(null);
-      }
-
-      if (type === "doc") {
-        setDoc(null);
-      }
-
-      // Optional: clear selections
-      setSelectedContacts([]);
-      setModalSearch("");
-    } catch (err) {
-      Swal.fire("Error", "Failed to send messages", "error");
-    }
-  };
-
-  const filteredModalContacts = contacts.filter((c) => {
-    const q = modalSearch.toLowerCase();
-    return (
-      c.name.toLowerCase().includes(q) || c.phone.toLowerCase().includes(q)
-    );
-  });
-
+  /* ---------------- TEXT VALIDATION ---------------- */
   const handleTextChange = (e) => {
     let value = e.target.value;
-
     let violated = false;
 
-    // Remove new lines
     if (value.includes("\n") || value.includes("\r")) {
       value = value.replace(/[\r\n]+/g, " ");
       violated = true;
     }
 
-    // Replace multiple spaces with single space
     if (/\s{2,}/.test(value)) {
       value = value.replace(/\s{2,}/g, " ");
       violated = true;
@@ -162,8 +43,8 @@ export default function SendMessages() {
       Swal.fire({
         icon: "info",
         title: "Formatting not allowed",
-        text: "New lines or multiple spaces are not allowed in WhatsApp messages.",
-        timer: 1800,
+        text: "WhatsApp allows only single-line messages with single spaces.",
+        timer: 1600,
         showConfirmButton: false,
       });
     }
@@ -172,224 +53,304 @@ export default function SendMessages() {
   };
 
   const handleTextKeyDown = (e) => {
-    // Block Enter key
     if (e.key === "Enter") {
       e.preventDefault();
-
       Swal.fire({
         icon: "info",
-        title: "Single-line message only",
-        text: "WhatsApp does not allow new lines. Please write the message in a single line.",
-        timer: 2000,
+        title: "Single line only",
+        text: "New lines are not allowed in WhatsApp messages.",
+        timer: 1600,
         showConfirmButton: false,
       });
     }
 
-    // Block consecutive spaces via keyboard
     if (e.key === " " && text.endsWith(" ")) {
       e.preventDefault();
-
-      Swal.fire({
-        icon: "info",
-        title: "Extra spaces not allowed",
-        text: "Multiple consecutive spaces are not allowed.",
-        timer: 1500,
-        showConfirmButton: false,
-      });
     }
   };
 
+  /* ---------------- SELECTION HELPERS ---------------- */
+  const toggleGroupExpand = (groupId) => {
+    setExpandedGroups((prev) =>
+      prev.includes(groupId)
+        ? prev.filter((id) => id !== groupId)
+        : [...prev, groupId],
+    );
+  };
+
+  const toggleGroup = (group) => {
+    setSelectedGroups((prevGroups) => {
+      const isSelected = prevGroups.includes(group._id);
+      const nextGroups = isSelected
+        ? prevGroups.filter((id) => id !== group._id)
+        : [...prevGroups, group._id];
+
+      setSelectedContacts(() => {
+        const phoneSet = new Set();
+
+        nextGroups.forEach((groupId) => {
+          const g = groups.find((gr) => gr._id === groupId);
+          g?.contacts?.forEach((c) => {
+            if (!manuallyDeselected.includes(c.phone)) {
+              phoneSet.add(c.phone);
+            }
+          });
+        });
+
+        return [...phoneSet];
+      });
+
+      return nextGroups;
+    });
+  };
+
+  const toggleContact = (phone) => {
+    setSelectedContacts((prev) => {
+      const isSelected = prev.includes(phone);
+
+      setManuallyDeselected((md) =>
+        isSelected ? [...md, phone] : md.filter((p) => p !== phone),
+      );
+
+      return isSelected ? prev.filter((p) => p !== phone) : [...prev, phone];
+    });
+  };
+
+  const selectAll = () => {
+    const allGroups = groups.map((g) => g._id);
+    const allPhones = groups.flatMap(
+      (g) => g.contacts?.map((c) => c.phone) || [],
+    );
+
+    setSelectedGroups(allGroups);
+    setSelectedContacts([...new Set(allPhones)]);
+    setExpandedGroups(allGroups); // expand all for visibility
+  };
+
+  const discardSelection = () => {
+    setSelectedGroups([]);
+    setSelectedContacts([]);
+    setManuallyDeselected([]);
+    setExpandedGroups([]);
+  };
+
+  /* ---------------- SEND FLOW ---------------- */
+  const openGroupSelection = () => {
+    if (!text.trim()) {
+      Swal.fire("Required", "Message text is required", "warning");
+      return;
+    }
+
+    discardSelection();
+    setSearch("");
+    setShowGroupModal(true);
+  };
+
+  const sendMessages = async () => {
+    if (!selectedContacts.length) {
+      Swal.fire("No contacts", "Please select at least one contact", "warning");
+      return;
+    }
+
+    const confirm = await Swal.fire({
+      title: "Confirm Send?",
+      html: `
+        <p>
+          Send message to
+          <strong> ${selectedGroups.length} group(s)</strong><br/>
+          <strong>${selectedContacts.length} contact(s)</strong>
+        </p>
+      `,
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonText: "Yes, Send",
+    });
+
+    if (!confirm.isConfirmed) return;
+
+    let success = 0;
+    let failed = 0;
+
+    Swal.fire({
+      title: "Sending...",
+      text: "Please wait",
+      allowOutsideClick: false,
+      didOpen: () => Swal.showLoading(),
+    });
+
+    for (const to of selectedContacts) {
+      try {
+        await api.post("/whatsapp/template/text", { to, text });
+        success++;
+      } catch {
+        failed++;
+      }
+    }
+
+    Swal.fire(
+      "Completed",
+      `Sent: ${success}\nFailed: ${failed}`,
+      failed ? "warning" : "success",
+    );
+
+    setText("");
+    discardSelection();
+    setShowGroupModal(false);
+  };
+
+  /* ---------------- FILTERED DATA ---------------- */
+  const filteredGroups = groups.filter((g) => {
+    const q = search.toLowerCase();
+    return (
+      g.name.toLowerCase().includes(q) ||
+      g.contacts?.some(
+        (c) => c.name.toLowerCase().includes(q) || c.phone.includes(q),
+      )
+    );
+  });
+
+  /* ---------------- UI ---------------- */
   return (
-    <div className="max-w-6xl space-y-6 mx-auto">
+    <div className="max-w-4xl mx-auto space-y-6">
       {/* TEXT MESSAGE */}
-      <div className="bg-white border rounded-xl p-5 space-y-3 shadow-sm">
-        <div className="flex items-center gap-2 text-gray-700 font-medium">
+      <div className="bg-white border rounded-xl p-3 space-y-3 shadow-sm">
+        <div className="flex items-center gap-2 font-medium text-gray-700">
           <Send size={18} />
           Text Message
         </div>
 
         <textarea
-          className="w-full p-3 border rounded-lg resize-none focus:ring focus:outline-none"
+          className="w-full p-3 border rounded-lg resize-none"
           rows={4}
-          placeholder="Type your message here..."
+          placeholder="Type your WhatsApp message..."
           value={text}
-          onKeyDown={handleTextKeyDown}
           onChange={handleTextChange}
+          onKeyDown={handleTextKeyDown}
           maxLength={700}
         />
 
         <div className="text-right">
           <button
+            onClick={openGroupSelection}
             disabled={!text}
-            onClick={() => confirmSend("text")}
-            className="btn disabled:opacity-50 cursor-pointer"
+            className="bg-blue-600 text-white px-5 py-2 rounded disabled:opacity-50"
           >
             Send Text
           </button>
         </div>
       </div>
 
-      {/* MEDIA MESSAGE */}
-      <div className="bg-white border rounded-xl p-5 space-y-3 shadow-sm">
-        <div className="flex items-center gap-2 text-gray-700 font-medium">
-          <Image size={18} />
-          Photo / Video
-        </div>
-
-        <input
-          type="file"
-          accept="image/*"
-          onChange={(e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-
-            if (file.size > 5 * 1024 * 1024) {
-              Swal.fire("Image too large", "Max 5MB allowed", "warning");
-              e.target.value = ""; // reset input
-              return;
-            }
-
-            setMedia(file);
-          }}
-        />
-
-        <div className="text-right">
-          <button
-            disabled={!media}
-            onClick={() => confirmSend("media")}
-            className="btn disabled:opacity-50 cursor-pointer"
-          >
-            Send Media
-          </button>
-        </div>
-      </div>
-
-      {/* DOCUMENT MESSAGE */}
-      <div className="bg-white border rounded-xl p-5 space-y-3 shadow-sm">
-        <div className="flex items-center gap-2 text-gray-700 font-medium">
-          <FileText size={18} />
-          Document
-        </div>
-
-        <input
-          type="file"
-          accept=".pdf,.doc,.docx"
-          onChange={(e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-
-            if (file.size > 100 * 1024 * 1024) {
-              Swal.fire("File too large", "Max 100MB allowed", "warning");
-              e.target.value = "";
-              return;
-            }
-
-            setDoc(file);
-          }}
-        />
-
-        <div className="text-right">
-          <button
-            disabled={!doc}
-            onClick={() => confirmSend("doc")}
-            className="btn disabled:opacity-50 cursor-pointer"
-          >
-            Send Document
-          </button>
-        </div>
-      </div>
-      {showContactModal && (
+      {/* GROUP + CONTACT MODAL */}
+      {showGroupModal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white w-full max-w-lg rounded-xl p-5 shadow-lg">
+          <div className="bg-white w-full max-w-2xl rounded-xl p-3 shadow-lg">
             <h3 className="text-lg font-semibold mb-3 flex justify-between">
-              Select Contacts
-              {selectedContacts.length > 0 && (
-                <span className="px-2 py-2 text-xs rounded-full bg-blue-100 text-blue-700 font-medium">
-                  {selectedContacts.length} selected
-                </span>
-              )}
+              Select Recipients
+              <span className="text-sm text-gray-500">
+                {selectedContacts.length} selected
+              </span>
             </h3>
 
-            <input
-              type="text"
-              placeholder="Search contacts..."
-              value={modalSearch}
-              onChange={(e) => setModalSearch(e.target.value)}
-              className="w-full mb-3 p-2.5 border rounded-lg focus:outline-none focus:ring focus:ring-blue-500"
-            />
-
-            {/* Select All */}
-            <div className="flex items-center gap-2 mb-3">
+            {/* SEARCH */}
+            <div className="flex items-center gap-2 mb-3 border rounded px-3 py-2">
+              <Search size={16} className="text-gray-400" />
               <input
-                type="checkbox"
-                checked={
-                  filteredModalContacts.length > 0 &&
-                  filteredModalContacts.every((c) =>
-                    selectedContacts.includes(c.phone)
-                  )
-                }
-                onChange={(e) =>
-                  setSelectedContacts(
-                    e.target.checked
-                      ? filteredModalContacts.map((c) => c.phone)
-                      : selectedContacts.filter(
-                          (p) =>
-                            !filteredModalContacts.some((c) => c.phone === p)
-                        )
-                  )
-                }
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search group or contact..."
+                className="w-full outline-none"
               />
-              <span>Select / Deselect All</span>
             </div>
 
-            {/* Contact List */}
-            <div className="max-h-64 overflow-y-auto border rounded p-3">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {filteredModalContacts.map((c) => (
-                  <label
-                    key={c._id}
-                    className="flex items-start gap-2 text-sm p-2 rounded hover:bg-gray-50 cursor-pointer"
-                  >
+            {/* ACTIONS */}
+            <div className="flex gap-2 mb-3">
+              <button
+                onClick={selectAll}
+                className="text-sm px-3 py-1 bg-gray-100 rounded"
+              >
+                Select All
+              </button>
+
+              <button
+                onClick={discardSelection}
+                className="text-sm px-3 py-1 bg-red-100 text-red-600 rounded"
+              >
+                Discard
+              </button>
+            </div>
+
+            {/* GROUP LIST */}
+            <div className="max-h-72 overflow-y-auto border rounded p-3 space-y-3">
+              {filteredGroups.map((g) => (
+                <div key={g._id} className="border rounded">
+                  {/* GROUP HEADER */}
+                  <div className="flex items-center gap-2 p-2 bg-gray-50">
+                    <button
+                      onClick={() => toggleGroupExpand(g._id)}
+                      className="text-gray-500"
+                    >
+                      {expandedGroups.includes(g._id) ? (
+                        <ChevronDown size={16} />
+                      ) : (
+                        <ChevronRight size={16} />
+                      )}
+                    </button>
+
                     <input
                       type="checkbox"
-                      className="mt-1"
-                      checked={selectedContacts.includes(c.phone)}
-                      onChange={(e) => {
-                        setSelectedContacts((prev) =>
-                          e.target.checked
-                            ? [...prev, c.phone]
-                            : prev.filter((p) => p !== c.phone)
-                        );
-                      }}
+                      checked={selectedGroups.includes(g._id)}
+                      onChange={() => toggleGroup(g)}
                     />
-                    <span className="leading-tight">
-                      <span className="block font-medium text-gray-800">
-                        {c.name}
-                      </span>
-                      <span className="block text-gray-500 text-xs">
-                        {c.phone}
+
+                    <span className="font-medium">
+                      {g.name}
+                      <span className="text-xs text-gray-500 ml-1">
+                        ({g.contacts?.length || 0})
                       </span>
                     </span>
-                  </label>
-                ))}
-              </div>
+                  </div>
+
+                  {/* CONTACTS */}
+                  {expandedGroups.includes(g._id) && (
+                    <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {g.contacts?.map((c) => (
+                        <label
+                          key={c.phone}
+                          className="flex items-center gap-2 text-sm"
+                        >
+                          <input
+                            type="checkbox"
+                            className="me-2"
+                            checked={selectedContacts.includes(c.phone)}
+                            onChange={() => toggleContact(c.phone)}
+                          />
+                          <span>
+                            {c.name}
+                            <span className="text-xs text-gray-500 ml-1">
+                              (+{c.phone})
+                            </span>
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
 
-            {/* Actions */}
+            {/* FOOTER */}
             <div className="flex justify-end gap-2 mt-4">
               <button
-                className="px-4 py-2 border rounded"
-                onClick={() => setShowContactModal(false)}
+                className="border px-4 py-2 rounded"
+                onClick={() => setShowGroupModal(false)}
               >
                 Cancel
               </button>
+
               <button
-                className="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50"
                 disabled={!selectedContacts.length}
-                onClick={() => {
-                  setShowContactModal(false);
-                  sendToContacts(selectedContacts, pendingType);
-                }}
+                onClick={sendMessages}
+                className="bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-50"
               >
                 Send
               </button>
