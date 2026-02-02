@@ -1,7 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import LoginPage from "./pages/LoginPage";
 import Dashboard from "./pages/Dashboard";
-import ManageContacts from "./pages/ManageContacts";
 import SendMessages from "./pages/SendMessages";
 import Groups from "./pages/Groups";
 import GroupDetails from "./pages/GroupDetails";
@@ -23,7 +22,6 @@ export default function App() {
             </ProtectedRoute>
           }
         >
-          {/* <Route index element={<ManageContacts />} /> */}
           <Route index element={<Groups />} />
           <Route path="send" element={<SendMessages />} />
           <Route path="groups" element={<Groups />} />

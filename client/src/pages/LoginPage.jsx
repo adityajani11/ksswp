@@ -6,7 +6,7 @@ export default function LoginPage() {
 
   const handleLogin = (token) => {
     localStorage.setItem("token", token);
-    navigate("/dashboard");
+    navigate("/dashboard/groups");
   };
 
   return (
