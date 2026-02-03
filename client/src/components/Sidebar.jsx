@@ -97,6 +97,22 @@ export default function Sidebar() {
             <Send size={18} />
             <span className="font-medium">Send Messages</span>
           </NavLink>
+          <NavLink
+            to="/dashboard/image"
+            className={linkStyle}
+            onClick={() => setOpen(false)}
+          >
+            <Users size={18} />
+            <span className="font-medium">Send Image</span>
+          </NavLink>
+          <NavLink
+            to="/dashboard/video"
+            className={linkStyle}
+            onClick={() => setOpen(false)}
+          >
+            <Users size={18} />
+            <span className="font-medium">Send Video</span>
+          </NavLink>
         </nav>
 
         {/* Logout */}
