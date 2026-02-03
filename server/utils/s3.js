@@ -16,6 +16,7 @@ exports.getSignedUploadUrl = async ({ key, contentType }) => {
     Bucket: BUCKET,
     Key: key,
     ContentType: contentType,
+    ChecksumAlgorithm: undefined,
   });
 
   return await getSignedUrl(s3, command, { expiresIn: 300 });

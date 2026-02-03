@@ -1,5 +1,6 @@
 const axios = require("axios");
-
+const { DeleteObjectCommand } = require("@aws-sdk/client-s3");
+const s3 = require("../utils/s3"); // or wherever your S3 client is
 /**
  * Shared WhatsApp API helper
  */
@@ -106,6 +107,29 @@ exports.sendImageTemplate = async (req, res) => {
       },
     });
 
+    // // Extract S3 key from public URL
+    // // Example link:
+    // // https://kss-whatsapp-media.s3.ap-south-1.amazonaws.com/image/uuid.png
+    // const s3Key = link.split(".amazonaws.com/")[1];
+
+    // // Schedule auto-delete AFTER successful send
+    // setTimeout(
+    //   async () => {
+    //     try {
+    //       await s3.send(
+    //         new DeleteObjectCommand({
+    //           Bucket: process.env.AWS_S3_BUCKET,
+    //           Key: s3Key,
+    //         }),
+    //       );
+    //       console.log("Auto-deleted media:", s3Key);
+    //     } catch (err) {
+    //       console.error("Auto-delete failed:", err);
+    //     }
+    //   },
+    //   5 * 60 * 100,
+    // ); // 5 minutes
+
     res.json({ success: true, type: "image-template" });
   } catch (err) {
     console.error("Image Template Error:", err.response?.data || err.message);
@@ -131,10 +155,10 @@ exports.sendVideoTemplate = async (req, res) => {
       recipient_type: "individual",
       type: "template",
       template: {
-        name: "video_message",
+        name: "util_video_msg",
         language: {
           policy: "deterministic",
-          code: "en_GB",
+          code: "en",
         },
         components: [
           {
@@ -163,8 +187,20 @@ exports.sendVideoTemplate = async (req, res) => {
 
     res.json({ success: true, type: "video-template" });
   } catch (err) {
-    console.error("Video Template Error:", err.response?.data || err.message);
-    res.status(500).json({ message: "Failed to send video template" });
+    const metaError = err.response?.data?.error;
+
+    console.error("Video template error:", metaError || err.message);
+
+    return res.status(500).json({
+      message: "Failed to send video message",
+      meta: metaError
+        ? {
+            code: metaError.code,
+            type: metaError.type,
+            message: metaError.message,
+          }
+        : null,
+    });
   }
 };
 
@@ -220,7 +256,7 @@ exports.sendDocumentTemplate = async (req, res) => {
   } catch (err) {
     console.error(
       "Document Template Error:",
-      err.response?.data || err.message
+      err.response?.data || err.message,
     );
     res.status(500).json({ message: "Failed to send document template" });
   }
