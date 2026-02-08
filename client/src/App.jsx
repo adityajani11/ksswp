@@ -7,6 +7,7 @@ import GroupDetails from "./pages/GroupDetails";
 import ProtectedRoute from "./routes/ProtectedRoute";
 import SendImageMessages from "./components/SendImageMessages";
 import SendVideoMessages from "./components/SendVideoMessages";
+import SendPdfMessages from "./components/SendPdfMessages";
 
 export default function App() {
   return (
@@ -29,6 +30,7 @@ export default function App() {
           <Route path="groups" element={<Groups />} />
           <Route path="image" element={<SendImageMessages />} />
           <Route path="video" element={<SendVideoMessages />} />
+          <Route path="document" element={<SendPdfMessages />} />
           <Route path="groups/:id" element={<GroupDetails />} />
         </Route>
 

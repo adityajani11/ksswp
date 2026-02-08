@@ -204,28 +204,28 @@ exports.sendVideoTemplate = async (req, res) => {
   }
 };
 
-/* =========================================================
-   SEND DOCUMENT TEMPLATE (LINK BASED)
-   ========================================================= */
+/*************************************************
+ SEND DOCUMENT TEMPLATE (LINK BASED)
+*************************************************/
 exports.sendDocumentTemplate = async (req, res) => {
   try {
     const { to, link, text } = req.body;
 
     if (!to || !link || !text) {
       return res.status(400).json({
-        message: "`to`, `link`, and `text` are required",
+        message: "`to`, `link` and `text` are required",
       });
     }
 
-    await sendWhatsAppRequest({
+    const response = await sendWhatsAppRequest({
       to,
       recipient_type: "individual",
       type: "template",
       template: {
-        name: "document_message",
+        name: "util_document_msg",
         language: {
           policy: "deterministic",
-          code: "en_GB",
+          code: "en",
         },
         components: [
           {
@@ -252,12 +252,23 @@ exports.sendDocumentTemplate = async (req, res) => {
       },
     });
 
-    res.json({ success: true, type: "document-template" });
+    const isSent =
+      response?.data?.messages && response.data.messages.length > 0;
+
+    res.json({
+      success: isSent,
+      type: "document-template",
+      waResponse: response.data,
+    });
   } catch (err) {
     console.error(
       "Document Template Error:",
       err.response?.data || err.message,
     );
-    res.status(500).json({ message: "Failed to send document template" });
+
+    res.status(500).json({
+      success: false,
+      message: err.response?.data?.error?.message || "Send failed",
+    });
   }
 };
