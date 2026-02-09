@@ -8,6 +8,7 @@ export default function Groups() {
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState("");
   const [showForm, setShowForm] = useState(false);
+  const [search, setSearch] = useState("");
   const navigate = useNavigate();
 
   const fetchGroups = async () => {
@@ -29,6 +30,10 @@ export default function Groups() {
     fetchGroups();
   }, []);
 
+  const filteredGroups = groups.filter((group) =>
+    group.name.toLowerCase().includes(search.toLowerCase()),
+  );
+
   const createGroup = async () => {
     if (!name.trim()) {
       Swal.fire("Required", "Group name is required", "warning");
@@ -46,7 +51,7 @@ export default function Groups() {
       Swal.fire(
         "Error",
         err.response?.data?.message || "Failed to create group",
-        "error"
+        "error",
       );
     }
   };
@@ -83,7 +88,7 @@ export default function Groups() {
       Swal.fire(
         "Error",
         err.response?.data?.message || "Failed to delete group",
-        "error"
+        "error",
       );
     }
   };
@@ -108,6 +113,19 @@ export default function Groups() {
         )}
       </div>
 
+      {/* Search */}
+      {groups.length > 0 && (
+        <div className="max-w-md">
+          <input
+            type="text"
+            placeholder="Search groups..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full border p-2 rounded"
+          />
+        </div>
+      )}
+
       {/* Create Group Form */}
       {(groups.length === 0 || showForm) && (
         <div className="bg-white p-4 rounded shadow max-w-md">
@@ -130,16 +148,14 @@ export default function Groups() {
       )}
 
       {/* No Groups */}
-      {groups.length === 0 && (
-        <p className="text-gray-500 italic">
-          No groups found. Create your first group to get started.
-        </p>
+      {filteredGroups.length === 0 && groups.length > 0 && (
+        <p className="text-gray-500 italic">No groups match your search.</p>
       )}
 
       {/* Groups Grid */}
       {groups.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {groups.map((group) => (
+          {filteredGroups.map((group) => (
             <div
               key={group._id}
               onClick={() => navigate(`/dashboard/groups/${group._id}`)}
