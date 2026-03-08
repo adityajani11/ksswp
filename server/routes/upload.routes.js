@@ -4,6 +4,6 @@ const { createSignedUpload } = require("../controllers/upload.controller");
 
 const router = express.Router();
 
-router.post("/signed-url", createSignedUpload);
+router.post("/signed-url", auth, createSignedUpload);
 
 module.exports = router;
