@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from "react-router-dom";
-import { Users, Send, LogOut, Menu, X } from "lucide-react";
+import { Users, Send, LogOut, Menu, X, History } from "lucide-react";
 import { useState } from "react";
 import Swal from "sweetalert2";
 
@@ -120,6 +120,14 @@ export default function Sidebar() {
           >
             <Users size={18} />
             <span className="font-medium">Send PDF</span>
+          </NavLink>
+          <NavLink
+            to="/dashboard/history"
+            className={linkStyle}
+            onClick={() => setOpen(false)}
+          >
+            <History size={18} />
+            <span className="font-medium">Message History</span>
           </NavLink>
         </nav>
 

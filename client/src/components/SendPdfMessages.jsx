@@ -2,6 +2,10 @@ import { useEffect, useState, useRef } from "react";
 import Swal from "sweetalert2";
 import api from "../utils/api";
 import { FileText, ChevronDown, ChevronRight, Search } from "lucide-react";
+import {
+  showCampaignSummary,
+  waitForCampaignCompletion,
+} from "../utils/campaignProgress";
 
 export default function SendPdfMessages() {
   /* ---------------- STATE ---------------- */
@@ -177,9 +181,23 @@ export default function SendPdfMessages() {
       return;
     }
 
+    const phoneToName = new Map();
+    for (const group of groups) {
+      for (const contact of group.contacts || []) {
+        if (!phoneToName.has(contact.phone)) {
+          phoneToName.set(contact.phone, contact.name || "");
+        }
+      }
+    }
+
+    const recipientsPayload = [...new Set(selectedContacts)].map((phone) => ({
+      to: phone,
+      name: phoneToName.get(phone) || "",
+    }));
+
     const confirm = await Swal.fire({
       title: "Confirm Send?",
-      html: `<p>Send PDF to <strong>${[...new Set(selectedContacts)].length}</strong> contact(s)</p>`,
+      html: `<p>Send PDF to <strong>${recipientsPayload.length}</strong> contact(s)</p>`,
       icon: "question",
       showCancelButton: true,
       confirmButtonText: "Yes, Send",
@@ -193,8 +211,6 @@ export default function SendPdfMessages() {
       didOpen: () => Swal.showLoading(),
     });
 
-    let success = 0;
-    let failed = 0;
     let uploadedUrl;
 
     try {
@@ -205,43 +221,53 @@ export default function SendPdfMessages() {
       return;
     }
 
-    let errors = [];
-    const uniqueContacts = [...new Set(selectedContacts)];
+    try {
+      const res = await api.post("/whatsapp/queue/campaign", {
+        type: "document",
+        text: caption,
+        contacts: recipientsPayload,
+        link: uploadedUrl,
+        mediaMimeType: pdfFile?.type,
+        mediaFileName: pdfFile?.name,
+      });
 
-    for (const to of uniqueContacts) {
+      let finalCampaign = null;
       try {
-        const res = await api.post("/whatsapp/template/document", {
-          to,
-          link: uploadedUrl,
-          text: caption,
+        finalCampaign = await waitForCampaignCompletion({
+          campaignId: res.data.campaignId,
+          title: "Sending PDF Messages...",
+          label: "PDF campaign",
         });
-
-        if (res.data?.success) {
-          success++;
-        } else {
-          failed++;
-          errors.push(to);
-        }
-      } catch (err) {
-        failed++;
-        errors.push(to);
+      } catch (trackErr) {
+        console.error("Campaign progress tracking failed:", trackErr);
       }
-    }
 
-    Swal.fire({
-      title: "Message Sent",
-      html: `
-    <div style="text-align:center">
-      <p style="margin-bottom:8px;">
-        ${"PDF message sent successfully."}
-      </p>
-      <p style="font-size:12px;color:#666">
-        If user is not active, they won't receive messages.
-      </p>
-    </div>
-  `,
-      icon: "success",
-    });
+      if (finalCampaign) {
+        await showCampaignSummary(finalCampaign, "PDF Campaign");
+      } else {
+        Swal.fire({
+          title: "Queued",
+          html: `
+            <div style="text-align:center">
+              <p style="margin-bottom:8px;">
+                PDF campaign queued for ${res.data.totalRecipients} contact(s).
+              </p>
+              <p style="font-size:12px;color:#666">
+                Campaign ID: ${res.data.campaignId}
+              </p>
+            </div>
+          `,
+          icon: "info",
+        });
+      }
+    } catch (err) {
+      Swal.fire(
+        "Error",
+        err.response?.data?.message || "Failed to queue PDF campaign",
+        "error",
+      );
+      return;
+    }
 
     setCaption("");
     setPdfFile(null);

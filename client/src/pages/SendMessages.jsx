@@ -2,6 +2,10 @@ import { useEffect, useState } from "react";
 import Swal from "sweetalert2";
 import api from "../utils/api";
 import { Send, ChevronDown, ChevronRight, Search } from "lucide-react";
+import {
+  showCampaignSummary,
+  waitForCampaignCompletion,
+} from "../utils/campaignProgress";
 
 export default function SendGroupMessages() {
   /* ---------------- STATE ---------------- */
@@ -152,13 +156,27 @@ export default function SendGroupMessages() {
       return;
     }
 
+    const phoneToName = new Map();
+    for (const group of groups) {
+      for (const contact of group.contacts || []) {
+        if (!phoneToName.has(contact.phone)) {
+          phoneToName.set(contact.phone, contact.name || "");
+        }
+      }
+    }
+
+    const recipientsPayload = [...new Set(selectedContacts)].map((phone) => ({
+      to: phone,
+      name: phoneToName.get(phone) || "",
+    }));
+
     const confirm = await Swal.fire({
       title: "Confirm Send?",
       html: `
         <p>
           Send message to
           <strong> ${selectedGroups.length} group(s)</strong><br/>
-          <strong>${selectedContacts.length} contact(s)</strong>
+          <strong>${recipientsPayload.length} contact(s)</strong>
         </p>
       `,
       icon: "question",
@@ -168,30 +186,48 @@ export default function SendGroupMessages() {
 
     if (!confirm.isConfirmed) return;
 
-    let success = 0;
-    let failed = 0;
-
     Swal.fire({
-      title: "Sending...",
-      text: "Please wait",
+      title: "Queueing...",
+      text: "Preparing campaign",
       allowOutsideClick: false,
       didOpen: () => Swal.showLoading(),
     });
 
-    for (const to of selectedContacts) {
-      try {
-        await api.post("/whatsapp/template/text", { to, text });
-        success++;
-      } catch {
-        failed++;
-      }
-    }
+    try {
+      const res = await api.post("/whatsapp/queue/campaign", {
+        type: "text",
+        text,
+        contacts: recipientsPayload,
+      });
 
-    Swal.fire(
-      "Completed",
-      `Sent: ${success}\nFailed: ${failed}`,
-      failed ? "warning" : "success",
-    );
+      let finalCampaign = null;
+      try {
+        finalCampaign = await waitForCampaignCompletion({
+          campaignId: res.data.campaignId,
+          title: "Sending Text Messages...",
+          label: "Text campaign",
+        });
+      } catch (trackErr) {
+        console.error("Campaign progress tracking failed:", trackErr);
+      }
+
+      if (finalCampaign) {
+        await showCampaignSummary(finalCampaign, "Text Campaign");
+      } else {
+        Swal.fire(
+          "Queued",
+          `Campaign queued for ${res.data.totalRecipients} contact(s).\nID: ${res.data.campaignId}`,
+          "info",
+        );
+      }
+    } catch (err) {
+      Swal.fire(
+        "Error",
+        err.response?.data?.message || "Failed to queue text campaign",
+        "error",
+      );
+      return;
+    }
 
     setText("");
     discardSelection();

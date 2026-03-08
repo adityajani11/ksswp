@@ -2,6 +2,10 @@ import { useEffect, useState, useRef } from "react";
 import Swal from "sweetalert2";
 import api from "../utils/api";
 import { Image, ChevronDown, ChevronRight, Search } from "lucide-react";
+import {
+  showCampaignSummary,
+  waitForCampaignCompletion,
+} from "../utils/campaignProgress";
 
 export default function SendImageMessages() {
   /* ---------------- STATE ---------------- */
@@ -195,11 +199,25 @@ export default function SendImageMessages() {
       return;
     }
 
+    const phoneToName = new Map();
+    for (const group of groups) {
+      for (const contact of group.contacts || []) {
+        if (!phoneToName.has(contact.phone)) {
+          phoneToName.set(contact.phone, contact.name || "");
+        }
+      }
+    }
+
+    const recipientsPayload = [...new Set(selectedContacts)].map((phone) => ({
+      to: phone,
+      name: phoneToName.get(phone) || "",
+    }));
+
     const confirm = await Swal.fire({
       title: "Confirm Send?",
       html: `
         <p>
-          Send image to <strong>${selectedContacts.length}</strong> contact(s)
+          Send image to <strong>${recipientsPayload.length}</strong> contact(s)
         </p>
       `,
       icon: "question",
@@ -215,8 +233,6 @@ export default function SendImageMessages() {
       didOpen: () => Swal.showLoading(),
     });
 
-    let success = 0;
-    let failed = 0;
     let uploadedUrl;
 
     try {
@@ -231,25 +247,45 @@ export default function SendImageMessages() {
       return;
     }
 
-    for (const to of selectedContacts) {
-      try {
-        await api.post("/whatsapp/template/image", {
-          to,
-          link: uploadedUrl,
-          text: caption,
-        });
-        success++;
-      } catch (err) {
-        console.error("WHATSAPP ERROR:", err);
-        failed++;
-      }
-    }
+    try {
+      const res = await api.post("/whatsapp/queue/campaign", {
+        type: "image",
+        text: caption,
+        contacts: recipientsPayload,
+        link: uploadedUrl,
+        mediaMimeType: imageFile?.type,
+        mediaFileName: imageFile?.name,
+      });
 
-    Swal.fire(
-      "Completed",
-      `Sent: ${success}\nFailed: ${failed}`,
-      failed ? "warning" : "success",
-    );
+      let finalCampaign = null;
+      try {
+        finalCampaign = await waitForCampaignCompletion({
+          campaignId: res.data.campaignId,
+          title: "Sending Image Messages...",
+          label: "Image campaign",
+        });
+      } catch (trackErr) {
+        console.error("Campaign progress tracking failed:", trackErr);
+      }
+
+      if (finalCampaign) {
+        await showCampaignSummary(finalCampaign, "Image Campaign");
+      } else {
+        Swal.fire(
+          "Queued",
+          `Image campaign queued for ${res.data.totalRecipients} contact(s).\nID: ${res.data.campaignId}`,
+          "info",
+        );
+      }
+    } catch (err) {
+      console.error("WHATSAPP QUEUE ERROR:", err);
+      Swal.fire(
+        "Error",
+        err.response?.data?.message || "Failed to queue image campaign",
+        "error",
+      );
+      return;
+    }
 
     setCaption("");
     setImageFile(null);
