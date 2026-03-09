@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import Swal from "sweetalert2";
-import api from "../utils/api";
+import api, { getApiErrorMessage } from "../utils/api";
 import { Image, ChevronDown, ChevronRight, Search } from "lucide-react";
 import {
   showCampaignSummary,
@@ -208,10 +208,10 @@ export default function SendImageMessages() {
       }
     }
 
-    const recipientsPayload = [...new Set(selectedContacts)].map((phone) => ({
-      to: phone,
-      name: phoneToName.get(phone) || "",
-    }));
+    const recipientsPayload = [...new Set(selectedContacts)].map((phone) => {
+      const name = phoneToName.get(phone) || "";
+      return name ? { to: phone, name } : { to: phone };
+    });
 
     const confirm = await Swal.fire({
       title: "Confirm Send?",
@@ -281,7 +281,7 @@ export default function SendImageMessages() {
       console.error("WHATSAPP QUEUE ERROR:", err);
       Swal.fire(
         "Error",
-        err.response?.data?.message || "Failed to queue image campaign",
+        getApiErrorMessage(err, "Failed to queue image campaign"),
         "error",
       );
       return;

@@ -5,6 +5,13 @@ const WORKER_ID = `${process.pid}-${Math.random().toString(16).slice(2, 10)}`;
 
 const POLL_INTERVAL_MS = Number(process.env.WHATSAPP_QUEUE_POLL_MS || 1000);
 const LOCK_TIMEOUT_MS = Number(process.env.WHATSAPP_QUEUE_LOCK_MS || 120000);
+const LOCK_HEARTBEAT_MS = Math.max(
+  1000,
+  Math.min(
+    Math.floor(LOCK_TIMEOUT_MS / 2),
+    Number(process.env.WHATSAPP_QUEUE_LOCK_HEARTBEAT_MS || 30000) || 30000,
+  ),
+);
 const RETRY_BASE_DELAY_MS = Number(
   process.env.WHATSAPP_QUEUE_RETRY_BASE_MS || 4000,
 );
@@ -17,6 +24,10 @@ const INTER_MESSAGE_DELAY_MS = Number(
 );
 const REQUEST_TIMEOUT_MS = Number(
   process.env.WHATSAPP_REQUEST_TIMEOUT_MS || 20000,
+);
+const MAX_RECIPIENTS_PER_CAMPAIGN = Math.max(
+  1,
+  Number(process.env.WHATSAPP_MAX_RECIPIENTS || 10000) || 10000,
 );
 const MEDIA_MODE = String(process.env.WHATSAPP_MEDIA_MODE || "auto")
   .trim()
@@ -328,6 +339,32 @@ function unlockCampaign(campaign) {
   campaign.lockedAt = null;
 }
 
+function touchCampaignLock(campaign) {
+  campaign.lockId = WORKER_ID;
+  campaign.lockedAt = new Date();
+}
+
+function syncCampaignCounters(campaign) {
+  let successCount = 0;
+  let failedCount = 0;
+
+  for (const recipient of campaign.recipients || []) {
+    if (recipient.status === "sent") {
+      successCount += 1;
+      continue;
+    }
+
+    if (recipient.status === "failed") {
+      failedCount += 1;
+    }
+  }
+
+  campaign.successCount = successCount;
+  campaign.failedCount = failedCount;
+
+  return { successCount, failedCount };
+}
+
 function calculateProgressSummary(campaign) {
   const totalRecipients = Number(campaign.totalRecipients || 0);
   const successCount = Number(campaign.successCount || 0);
@@ -601,6 +638,14 @@ async function processCampaign(campaign) {
     throw err;
   }
 
+  if (!campaign.startedAt) {
+    campaign.startedAt = new Date();
+  }
+
+  const counters = syncCampaignCounters(campaign);
+  let successCount = counters.successCount;
+  let failedCount = counters.failedCount;
+  let lastHeartbeatAt = 0;
   let nextRunAt = null;
 
   for (const recipient of campaign.recipients) {
@@ -614,9 +659,16 @@ async function processCampaign(campaign) {
       continue;
     }
 
+    const previousStatus = recipient.status;
     recipient.attempts += 1;
     recipient.lastTriedAt = new Date();
     recipient.lastError = null;
+
+    if (Date.now() - lastHeartbeatAt >= LOCK_HEARTBEAT_MS) {
+      touchCampaignLock(campaign);
+      lastHeartbeatAt = Date.now();
+    }
+
     await campaign.save();
 
     try {
@@ -662,6 +714,21 @@ async function processCampaign(campaign) {
         recipient.deliveryStatus = "failed";
         recipient.statusUpdatedAt = new Date();
       }
+    }
+
+    if (previousStatus !== recipient.status) {
+      if (previousStatus === "sent") successCount = Math.max(0, successCount - 1);
+      if (previousStatus === "failed") failedCount = Math.max(0, failedCount - 1);
+      if (recipient.status === "sent") successCount += 1;
+      if (recipient.status === "failed") failedCount += 1;
+    }
+
+    campaign.successCount = successCount;
+    campaign.failedCount = failedCount;
+
+    if (Date.now() - lastHeartbeatAt >= LOCK_HEARTBEAT_MS) {
+      touchCampaignLock(campaign);
+      lastHeartbeatAt = Date.now();
     }
 
     await campaign.save();
@@ -726,6 +793,7 @@ async function recoverStaleLocks() {
     {
       status: "processing",
       lockedAt: { $lt: staleBefore },
+      updatedAt: { $lt: staleBefore },
     },
     {
       $set: {
@@ -756,7 +824,10 @@ async function runWorkerTick() {
         $or: [
           { lockId: { $exists: false } },
           { lockId: null },
-          { lockedAt: { $lt: staleBefore } },
+          {
+            lockedAt: { $lt: staleBefore },
+            updatedAt: { $lt: staleBefore },
+          },
         ],
       },
       {
@@ -764,7 +835,6 @@ async function runWorkerTick() {
           status: "processing",
           lockId: WORKER_ID,
           lockedAt: now,
-          startedAt: now,
         },
       },
       {
@@ -806,6 +876,12 @@ async function enqueueCampaign({
   const normalizedContacts = normalizeContacts(contacts);
   if (!normalizedContacts.length) {
     throw new QueueValidationError("At least one recipient is required");
+  }
+
+  if (normalizedContacts.length > MAX_RECIPIENTS_PER_CAMPAIGN) {
+    throw new QueueValidationError(
+      `Recipient limit exceeded. Max allowed is ${MAX_RECIPIENTS_PER_CAMPAIGN}.`,
+    );
   }
 
   validateContacts(normalizedContacts);
@@ -1082,7 +1158,35 @@ async function applyDeliveryWebhook(payload) {
         });
 
         if (campaign && !FINAL_CAMPAIGN_STATUSES.has(campaign.status)) {
-          await finalizeCampaign(campaign);
+          syncCampaignCounters(campaign);
+          if (event.error) {
+            campaign.lastError = event.error;
+          }
+
+          const pendingCount = Math.max(
+            0,
+            Number(campaign.totalRecipients || 0) -
+              Number(campaign.successCount || 0) -
+              Number(campaign.failedCount || 0),
+          );
+
+          if (pendingCount <= 0 && campaign.status !== "processing") {
+            await finalizeCampaign(campaign);
+          } else {
+            const setFields = {
+              successCount: campaign.successCount,
+              failedCount: campaign.failedCount,
+            };
+
+            if (event.error) {
+              setFields.lastError = event.error;
+            }
+
+            await MessageCampaign.updateOne(
+              { _id: campaign._id },
+              { $set: setFields },
+            );
+          }
         }
       }
     }
