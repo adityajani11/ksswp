@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import api from "../utils/api";
+import api, { getApiErrorMessage } from "../utils/api";
 import Swal from "sweetalert2";
 import { calculateCampaignProgress } from "../utils/campaignProgress";
 
@@ -61,9 +61,11 @@ export default function MessageHistory() {
     [campaigns, selectedCampaignId],
   );
 
-  const fetchHistory = async ({ preserveSelection = true } = {}) => {
+  const fetchHistory = async ({ preserveSelection = true, silent = false } = {}) => {
     try {
-      setLoading(true);
+      if (!silent) {
+        setLoading(true);
+      }
       const res = await api.get("/whatsapp/queue/campaigns?limit=60&page=1");
       const items = Array.isArray(res.data?.items) ? res.data.items : [];
       setCampaigns(items);
@@ -78,21 +80,23 @@ export default function MessageHistory() {
         return items[0]?._id || null;
       });
     } catch (err) {
-      Swal.fire(
-        "Error",
-        err.response?.data?.message || "Failed to load message history",
-        "error",
-      );
+      if (!silent) {
+        Swal.fire("Error", getApiErrorMessage(err, "Failed to load message history"), "error");
+      }
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
   };
 
-  const fetchDetails = async (campaignId) => {
+  const fetchDetails = async (campaignId, { silent = false } = {}) => {
     if (!campaignId) return;
 
     try {
-      setDetailsLoading(true);
+      if (!silent) {
+        setDetailsLoading(true);
+      }
       const res = await api.get(
         `/whatsapp/queue/campaign/${campaignId}/recipients`,
       );
@@ -107,13 +111,40 @@ export default function MessageHistory() {
           : [],
       });
     } catch (err) {
-      Swal.fire(
-        "Error",
-        err.response?.data?.message || "Failed to load campaign details",
-        "error",
-      );
+      if (!silent) {
+        Swal.fire("Error", getApiErrorMessage(err, "Failed to load campaign details"), "error");
+      }
     } finally {
-      setDetailsLoading(false);
+      if (!silent) {
+        setDetailsLoading(false);
+      }
+    }
+  };
+
+  const refreshCampaignSummary = async (campaignId, { silent = false } = {}) => {
+    if (!campaignId) return;
+
+    try {
+      const res = await api.get(`/whatsapp/queue/campaign/${campaignId}`);
+      const campaign = res.data?.campaign || null;
+      if (!campaign) return;
+
+      setDetails((prev) => {
+        if (!prev) return prev;
+        return { ...prev, campaign };
+      });
+
+      setCampaigns((prev) =>
+        prev.map((item) => (item._id === campaignId ? { ...item, ...campaign } : item)),
+      );
+    } catch (err) {
+      if (!silent) {
+        Swal.fire(
+          "Error",
+          getApiErrorMessage(err, "Failed to refresh campaign progress"),
+          "error",
+        );
+      }
     }
   };
 
@@ -135,10 +166,13 @@ export default function MessageHistory() {
 
     let tick = 0;
     const interval = setInterval(() => {
-      fetchDetails(selectedCampaignId);
+      refreshCampaignSummary(selectedCampaignId, { silent: true });
       tick += 1;
       if (tick % 3 === 0) {
-        fetchHistory();
+        fetchHistory({ silent: true });
+      }
+      if (tick % 6 === 0) {
+        fetchDetails(selectedCampaignId, { silent: true });
       }
     }, 2500);
 

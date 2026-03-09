@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import Swal from "sweetalert2";
-import api from "../utils/api";
+import api, { getApiErrorMessage } from "../utils/api";
 import { FileText, ChevronDown, ChevronRight, Search } from "lucide-react";
 import {
   showCampaignSummary,
@@ -190,10 +190,10 @@ export default function SendPdfMessages() {
       }
     }
 
-    const recipientsPayload = [...new Set(selectedContacts)].map((phone) => ({
-      to: phone,
-      name: phoneToName.get(phone) || "",
-    }));
+    const recipientsPayload = [...new Set(selectedContacts)].map((phone) => {
+      const name = phoneToName.get(phone) || "";
+      return name ? { to: phone, name } : { to: phone };
+    });
 
     const confirm = await Swal.fire({
       title: "Confirm Send?",
@@ -263,7 +263,7 @@ export default function SendPdfMessages() {
     } catch (err) {
       Swal.fire(
         "Error",
-        err.response?.data?.message || "Failed to queue PDF campaign",
+        getApiErrorMessage(err, "Failed to queue PDF campaign"),
         "error",
       );
       return;
