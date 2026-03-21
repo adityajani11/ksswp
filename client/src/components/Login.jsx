@@ -1,6 +1,7 @@
 import { useState } from "react";
 import Swal from "sweetalert2";
 import api from "../utils/api";
+import { runWithSwalLoader } from "../utils/swalLoading";
 
 export default function Login({ onLogin }) {
   const [username, setUsername] = useState("");
@@ -18,10 +19,17 @@ export default function Login({ onLogin }) {
     try {
       setLoading(true);
 
-      const res = await api.post("/auth/login", {
-        username,
-        password,
-      });
+      const res = await runWithSwalLoader(
+        {
+          title: "Logging in",
+          text: "Checking your credentials...",
+        },
+        () =>
+          api.post("/auth/login", {
+            username,
+            password,
+          }),
+      );
 
       const token = res.data.token;
       onLogin(token);

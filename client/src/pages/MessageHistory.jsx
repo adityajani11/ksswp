@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import api, { getApiErrorMessage } from "../utils/api";
 import Swal from "sweetalert2";
 import { calculateCampaignProgress } from "../utils/campaignProgress";
+import { runWithSwalLoader } from "../utils/swalLoading";
 
 const FINAL_STATUSES = new Set(["completed", "completed_with_failures", "failed"]);
 
@@ -195,7 +196,13 @@ export default function MessageHistory() {
 
     try {
       setDeleting(true);
-      await api.delete(`/whatsapp/queue/campaign/${selectedCampaignId}`);
+      await runWithSwalLoader(
+        {
+          title: "Deleting history",
+          text: "Removing this campaign history...",
+        },
+        () => api.delete(`/whatsapp/queue/campaign/${selectedCampaignId}`),
+      );
       setDetails(null);
       setSelectedCampaignId(null);
       await fetchHistory({ preserveSelection: false });
@@ -225,7 +232,13 @@ export default function MessageHistory() {
 
     try {
       setDeleting(true);
-      const res = await api.delete("/whatsapp/queue/campaigns");
+      const res = await runWithSwalLoader(
+        {
+          title: "Clearing history",
+          text: "Removing previous campaign history...",
+        },
+        () => api.delete("/whatsapp/queue/campaigns"),
+      );
       setDetails(null);
       setSelectedCampaignId(null);
       await fetchHistory({ preserveSelection: false });

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Swal from "sweetalert2";
 import api, { getApiErrorMessage } from "../utils/api";
 import { Send, ChevronDown, ChevronRight, Search } from "lucide-react";
@@ -6,29 +6,31 @@ import {
   showCampaignSummary,
   waitForCampaignCompletion,
 } from "../utils/campaignProgress";
+import useRecipientGroups from "../hooks/useRecipientGroups";
 
 export default function SendGroupMessages() {
-  /* ---------------- STATE ---------------- */
   const [text, setText] = useState("");
-  const [groups, setGroups] = useState([]);
-
   const [showGroupModal, setShowGroupModal] = useState(false);
+  const {
+    groups,
+    groupsLoading,
+    searchLoading,
+    selectionLoading,
+    selectedGroups,
+    selectedContacts,
+    expandedGroups,
+    search,
+    setSearch,
+    ensureGroupSummariesLoaded,
+    buildRecipientPayload,
+    discardSelection,
+    isGroupLoading,
+    toggleContact,
+    toggleGroup,
+    toggleGroupExpand,
+    selectAll,
+  } = useRecipientGroups();
 
-  const [selectedGroups, setSelectedGroups] = useState([]); // groupIds
-  const [selectedContacts, setSelectedContacts] = useState([]); // phone numbers
-  const [manuallyDeselected, setManuallyDeselected] = useState([]); // phones
-
-  const [expandedGroups, setExpandedGroups] = useState([]); // groupIds
-  const [search, setSearch] = useState("");
-
-  /* ---------------- FETCH GROUPS ---------------- */
-  useEffect(() => {
-    api.get("/groups").then((res) => {
-      setGroups(Array.isArray(res.data) ? res.data : []);
-    });
-  }, []);
-
-  /* ---------------- TEXT VALIDATION ---------------- */
   const handleTextChange = (e) => {
     let value = e.target.value;
     let violated = false;
@@ -73,73 +75,7 @@ export default function SendGroupMessages() {
     }
   };
 
-  /* ---------------- SELECTION HELPERS ---------------- */
-  const toggleGroupExpand = (groupId) => {
-    setExpandedGroups((prev) =>
-      prev.includes(groupId)
-        ? prev.filter((id) => id !== groupId)
-        : [...prev, groupId],
-    );
-  };
-
-  const toggleGroup = (group) => {
-    setSelectedGroups((prevGroups) => {
-      const isSelected = prevGroups.includes(group._id);
-      const nextGroups = isSelected
-        ? prevGroups.filter((id) => id !== group._id)
-        : [...prevGroups, group._id];
-
-      setSelectedContacts(() => {
-        const phoneSet = new Set();
-
-        nextGroups.forEach((groupId) => {
-          const g = groups.find((gr) => gr._id === groupId);
-          g?.contacts?.forEach((c) => {
-            if (!manuallyDeselected.includes(c.phone)) {
-              phoneSet.add(c.phone);
-            }
-          });
-        });
-
-        return [...phoneSet];
-      });
-
-      return nextGroups;
-    });
-  };
-
-  const toggleContact = (phone) => {
-    setSelectedContacts((prev) => {
-      const isSelected = prev.includes(phone);
-
-      setManuallyDeselected((md) =>
-        isSelected ? [...md, phone] : md.filter((p) => p !== phone),
-      );
-
-      return isSelected ? prev.filter((p) => p !== phone) : [...prev, phone];
-    });
-  };
-
-  const selectAll = () => {
-    const allGroups = groups.map((g) => g._id);
-    const allPhones = groups.flatMap(
-      (g) => g.contacts?.map((c) => c.phone) || [],
-    );
-
-    setSelectedGroups(allGroups);
-    setSelectedContacts([...new Set(allPhones)]);
-    setExpandedGroups(allGroups); // expand all for visibility
-  };
-
-  const discardSelection = () => {
-    setSelectedGroups([]);
-    setSelectedContacts([]);
-    setManuallyDeselected([]);
-    setExpandedGroups([]);
-  };
-
-  /* ---------------- SEND FLOW ---------------- */
-  const openGroupSelection = () => {
+  const openGroupSelection = async () => {
     if (!text.trim()) {
       Swal.fire("Required", "Message text is required", "warning");
       return;
@@ -148,6 +84,11 @@ export default function SendGroupMessages() {
     discardSelection();
     setSearch("");
     setShowGroupModal(true);
+
+    const nextGroups = await ensureGroupSummariesLoaded();
+    if (!nextGroups) {
+      setShowGroupModal(false);
+    }
   };
 
   const sendMessages = async () => {
@@ -156,19 +97,10 @@ export default function SendGroupMessages() {
       return;
     }
 
-    const phoneToName = new Map();
-    for (const group of groups) {
-      for (const contact of group.contacts || []) {
-        if (!phoneToName.has(contact.phone)) {
-          phoneToName.set(contact.phone, contact.name || "");
-        }
-      }
+    const recipientsPayload = await buildRecipientPayload();
+    if (!recipientsPayload?.length) {
+      return;
     }
-
-    const recipientsPayload = [...new Set(selectedContacts)].map((phone) => {
-      const name = phoneToName.get(phone) || "";
-      return name ? { to: phone, name } : { to: phone };
-    });
 
     const confirm = await Swal.fire({
       title: "Confirm Send?",
@@ -234,21 +166,8 @@ export default function SendGroupMessages() {
     setShowGroupModal(false);
   };
 
-  /* ---------------- FILTERED DATA ---------------- */
-  const filteredGroups = groups.filter((g) => {
-    const q = search.toLowerCase();
-    return (
-      g.name.toLowerCase().includes(q) ||
-      g.contacts?.some(
-        (c) => c.name.toLowerCase().includes(q) || c.phone.includes(q),
-      )
-    );
-  });
-
-  /* ---------------- UI ---------------- */
   return (
     <div className="max-w-4xl mx-auto space-y-6">
-      {/* TEXT MESSAGE */}
       <div className="bg-white border rounded-xl p-3 space-y-3 shadow-sm">
         <div className="flex items-center gap-2 font-medium text-gray-700">
           <Send size={18} />
@@ -276,7 +195,6 @@ export default function SendGroupMessages() {
         </div>
       </div>
 
-      {/* GROUP + CONTACT MODAL */}
       {showGroupModal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
           <div className="bg-white w-full max-w-2xl rounded-xl p-3 shadow-lg">
@@ -287,7 +205,6 @@ export default function SendGroupMessages() {
               </span>
             </h3>
 
-            {/* SEARCH */}
             <div className="flex items-center gap-2 mb-3 border rounded px-3 py-2">
               <Search size={16} className="text-gray-400" />
               <input
@@ -298,13 +215,13 @@ export default function SendGroupMessages() {
               />
             </div>
 
-            {/* ACTIONS */}
             <div className="flex gap-2 mb-3">
               <button
                 onClick={selectAll}
-                className="text-sm px-3 py-1 bg-gray-100 rounded"
+                disabled={selectionLoading || groupsLoading}
+                className="text-sm px-3 py-1 bg-gray-100 rounded disabled:opacity-50"
               >
-                Select All
+                {selectionLoading ? "Selecting..." : "Select All"}
               </button>
 
               <button
@@ -315,66 +232,78 @@ export default function SendGroupMessages() {
               </button>
             </div>
 
-            {/* GROUP LIST */}
             <div className="max-h-72 overflow-y-auto border rounded p-3 space-y-3">
-              {filteredGroups.map((g) => (
-                <div key={g._id} className="border rounded">
-                  {/* GROUP HEADER */}
-                  <div className="flex items-center gap-2 p-2 bg-gray-50">
-                    <button
-                      onClick={() => toggleGroupExpand(g._id)}
-                      className="text-gray-500"
-                    >
-                      {expandedGroups.includes(g._id) ? (
-                        <ChevronDown size={16} />
-                      ) : (
-                        <ChevronRight size={16} />
-                      )}
-                    </button>
+              {groupsLoading || searchLoading ? (
+                <p className="text-sm text-gray-500">
+                  {searchLoading ? "Searching groups..." : "Loading groups..."}
+                </p>
+              ) : groups.length === 0 ? (
+                <p className="text-sm text-gray-500">No groups found.</p>
+              ) : (
+                groups.map((group) => (
+                  <div key={group._id} className="border rounded">
+                    <div className="flex items-center gap-2 p-2 bg-gray-50">
+                      <button
+                        onClick={() => toggleGroupExpand(group._id)}
+                        className="text-gray-500 disabled:opacity-50"
+                        disabled={isGroupLoading(group._id)}
+                      >
+                        {expandedGroups.includes(group._id) ? (
+                          <ChevronDown size={16} />
+                        ) : (
+                          <ChevronRight size={16} />
+                        )}
+                      </button>
 
-                    <input
-                      type="checkbox"
-                      checked={selectedGroups.includes(g._id)}
-                      onChange={() => toggleGroup(g)}
-                    />
+                      <input
+                        type="checkbox"
+                        checked={selectedGroups.includes(group._id)}
+                        onChange={() => toggleGroup(group)}
+                        disabled={isGroupLoading(group._id)}
+                      />
 
-                    <span className="font-medium">
-                      {g.name}
-                      <span className="text-xs text-gray-500 ml-1">
-                        ({g.contacts?.length || 0})
+                      <span className="font-medium">
+                        {group.name}
+                        <span className="text-xs text-gray-500 ml-1">
+                          ({group.contactCount || 0})
+                        </span>
                       </span>
-                    </span>
-                  </div>
-
-                  {/* CONTACTS */}
-                  {expandedGroups.includes(g._id) && (
-                    <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {g.contacts?.map((c) => (
-                        <label
-                          key={c.phone}
-                          className="flex items-center gap-2 text-sm"
-                        >
-                          <input
-                            type="checkbox"
-                            className="me-2"
-                            checked={selectedContacts.includes(c.phone)}
-                            onChange={() => toggleContact(c.phone)}
-                          />
-                          <span>
-                            {c.name}
-                            <span className="text-xs text-gray-500 ml-1">
-                              (+{c.phone})
-                            </span>
-                          </span>
-                        </label>
-                      ))}
                     </div>
-                  )}
-                </div>
-              ))}
+
+                    {expandedGroups.includes(group._id) && (
+                      <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {isGroupLoading(group._id) ? (
+                          <p className="text-sm text-gray-500">Loading contacts...</p>
+                        ) : (group.contacts || []).length === 0 ? (
+                          <p className="text-sm text-gray-500">No contacts in this group.</p>
+                        ) : (
+                          group.contacts.map((contact) => (
+                            <label
+                              key={contact.phone}
+                              className="flex items-center gap-2 text-sm"
+                            >
+                              <input
+                                type="checkbox"
+                                className="me-2"
+                                checked={selectedContacts.includes(contact.phone)}
+                                onChange={() => toggleContact(contact.phone)}
+                              />
+                              <span>
+                                {contact.name}
+                                <span className="text-xs text-gray-500 ml-1">
+                                  (+{contact.phone})
+                                </span>
+                              </span>
+                            </label>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
             </div>
 
-            {/* FOOTER */}
             <div className="flex justify-end gap-2 mt-4">
               <button
                 className="border px-4 py-2 rounded"

@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useRef, useState } from "react";
 import Swal from "sweetalert2";
 import api, { getApiErrorMessage } from "../utils/api";
 import { Video, ChevronDown, ChevronRight, Search } from "lucide-react";
@@ -6,32 +6,34 @@ import {
   showCampaignSummary,
   waitForCampaignCompletion,
 } from "../utils/campaignProgress";
+import useRecipientGroups from "../hooks/useRecipientGroups";
 
 export default function SendVideoMessages() {
-  /* ---------------- STATE ---------------- */
   const [caption, setCaption] = useState("");
   const [videoFile, setVideoFile] = useState(null);
-
-  const [groups, setGroups] = useState([]);
   const [showGroupModal, setShowGroupModal] = useState(false);
-
-  const [selectedGroups, setSelectedGroups] = useState([]);
-  const [selectedContacts, setSelectedContacts] = useState([]);
-  const [manuallyDeselected, setManuallyDeselected] = useState([]);
-
-  const [expandedGroups, setExpandedGroups] = useState([]);
-  const [search, setSearch] = useState("");
+  const {
+    groups,
+    groupsLoading,
+    searchLoading,
+    selectionLoading,
+    selectedGroups,
+    selectedContacts,
+    expandedGroups,
+    search,
+    setSearch,
+    ensureGroupSummariesLoaded,
+    buildRecipientPayload,
+    discardSelection,
+    isGroupLoading,
+    toggleContact,
+    toggleGroup,
+    toggleGroupExpand,
+    selectAll,
+  } = useRecipientGroups();
 
   const fileInputRef = useRef(null);
 
-  /* ---------------- FETCH GROUPS ---------------- */
-  useEffect(() => {
-    api.get("/groups").then((res) => {
-      setGroups(Array.isArray(res.data) ? res.data : []);
-    });
-  }, []);
-
-  /* ---------------- CAPTION VALIDATION ---------------- */
   const handleCaptionChange = (e) => {
     let value = e.target.value;
     let violated = false;
@@ -62,7 +64,6 @@ export default function SendVideoMessages() {
     if (e.key === " " && caption.endsWith(" ")) e.preventDefault();
   };
 
-  /* ---------------- VIDEO VALIDATION ---------------- */
   const handleVideoSelect = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -82,68 +83,6 @@ export default function SendVideoMessages() {
     setVideoFile(file);
   };
 
-  /* ---------------- GROUP SELECTION ---------------- */
-  const toggleGroupExpand = (groupId) => {
-    setExpandedGroups((prev) =>
-      prev.includes(groupId)
-        ? prev.filter((id) => id !== groupId)
-        : [...prev, groupId],
-    );
-  };
-
-  const toggleGroup = (group) => {
-    setSelectedGroups((prevGroups) => {
-      const isSelected = prevGroups.includes(group._id);
-      const nextGroups = isSelected
-        ? prevGroups.filter((id) => id !== group._id)
-        : [...prevGroups, group._id];
-
-      setSelectedContacts(() => {
-        const phoneSet = new Set();
-        nextGroups.forEach((groupId) => {
-          const g = groups.find((gr) => gr._id === groupId);
-          g?.contacts?.forEach((c) => {
-            if (!manuallyDeselected.includes(c.phone)) {
-              phoneSet.add(c.phone);
-            }
-          });
-        });
-        return [...phoneSet];
-      });
-
-      return nextGroups;
-    });
-  };
-
-  const toggleContact = (phone) => {
-    setSelectedContacts((prev) => {
-      const isSelected = prev.includes(phone);
-      setManuallyDeselected((md) =>
-        isSelected ? [...md, phone] : md.filter((p) => p !== phone),
-      );
-      return isSelected ? prev.filter((p) => p !== phone) : [...prev, phone];
-    });
-  };
-
-  const selectAll = () => {
-    const allGroups = groups.map((g) => g._id);
-    const allPhones = groups.flatMap(
-      (g) => g.contacts?.map((c) => c.phone) || [],
-    );
-
-    setSelectedGroups(allGroups);
-    setSelectedContacts([...new Set(allPhones)]);
-    setExpandedGroups(allGroups);
-  };
-
-  const discardSelection = () => {
-    setSelectedGroups([]);
-    setSelectedContacts([]);
-    setManuallyDeselected([]);
-    setExpandedGroups([]);
-  };
-
-  /* ---------------- UPLOAD TO S3 ---------------- */
   const uploadVideoToS3 = async () => {
     const res = await api.post("/upload/signed-url", {
       fileName: videoFile.name,
@@ -165,8 +104,7 @@ export default function SendVideoMessages() {
     return publicUrl;
   };
 
-  /* ---------------- SEND FLOW ---------------- */
-  const openGroupSelection = () => {
+  const openGroupSelection = async () => {
     if (!caption.trim() || !videoFile) {
       Swal.fire("Required", "Video and caption are required", "warning");
       return;
@@ -175,6 +113,11 @@ export default function SendVideoMessages() {
     discardSelection();
     setSearch("");
     setShowGroupModal(true);
+
+    const nextGroups = await ensureGroupSummariesLoaded();
+    if (!nextGroups) {
+      setShowGroupModal(false);
+    }
   };
 
   const sendVideoMessages = async () => {
@@ -183,19 +126,10 @@ export default function SendVideoMessages() {
       return;
     }
 
-    const phoneToName = new Map();
-    for (const group of groups) {
-      for (const contact of group.contacts || []) {
-        if (!phoneToName.has(contact.phone)) {
-          phoneToName.set(contact.phone, contact.name || "");
-        }
-      }
+    const recipientsPayload = await buildRecipientPayload();
+    if (!recipientsPayload?.length) {
+      return;
     }
-
-    const recipientsPayload = [...new Set(selectedContacts)].map((phone) => {
-      const name = phoneToName.get(phone) || "";
-      return name ? { to: phone, name } : { to: phone };
-    });
 
     const confirm = await Swal.fire({
       title: "Confirm Send?",
@@ -270,18 +204,6 @@ export default function SendVideoMessages() {
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  /* ---------------- FILTER ---------------- */
-  const filteredGroups = groups.filter((g) => {
-    const q = search.toLowerCase();
-    return (
-      g.name.toLowerCase().includes(q) ||
-      g.contacts?.some(
-        (c) => c.name.toLowerCase().includes(q) || c.phone.includes(q),
-      )
-    );
-  });
-
-  /* ---------------- UI ---------------- */
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <div className="bg-white border rounded-xl p-4 space-y-3">
@@ -318,11 +240,9 @@ export default function SendVideoMessages() {
         </div>
       </div>
 
-      {/* GROUP MODAL */}
       {showGroupModal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
           <div className="bg-white w-full max-w-2xl rounded-xl p-3 shadow-lg">
-            {/* FULL MODAL CONTENT */}
             <h3 className="text-lg font-semibold mb-3 flex justify-between">
               Select Recipients
               <span className="text-sm text-gray-500">
@@ -343,9 +263,10 @@ export default function SendVideoMessages() {
             <div className="flex gap-2 mb-3">
               <button
                 onClick={selectAll}
-                className="text-sm px-3 py-1 bg-gray-100 rounded"
+                disabled={selectionLoading || groupsLoading}
+                className="text-sm px-3 py-1 bg-gray-100 rounded disabled:opacity-50"
               >
-                Select All
+                {selectionLoading ? "Selecting..." : "Select All"}
               </button>
               <button
                 onClick={discardSelection}
@@ -356,55 +277,73 @@ export default function SendVideoMessages() {
             </div>
 
             <div className="max-h-72 overflow-y-auto border rounded p-3 space-y-3">
-              {filteredGroups.map((g) => (
-                <div key={g._id} className="border rounded">
-                  <div className="flex items-center gap-2 p-2 bg-gray-50">
-                    <button onClick={() => toggleGroupExpand(g._id)}>
-                      {expandedGroups.includes(g._id) ? (
-                        <ChevronDown size={16} />
-                      ) : (
-                        <ChevronRight size={16} />
-                      )}
-                    </button>
+              {groupsLoading || searchLoading ? (
+                <p className="text-sm text-gray-500">
+                  {searchLoading ? "Searching groups..." : "Loading groups..."}
+                </p>
+              ) : groups.length === 0 ? (
+                <p className="text-sm text-gray-500">No groups found.</p>
+              ) : (
+                groups.map((group) => (
+                  <div key={group._id} className="border rounded">
+                    <div className="flex items-center gap-2 p-2 bg-gray-50">
+                      <button
+                        onClick={() => toggleGroupExpand(group._id)}
+                        disabled={isGroupLoading(group._id)}
+                      >
+                        {expandedGroups.includes(group._id) ? (
+                          <ChevronDown size={16} />
+                        ) : (
+                          <ChevronRight size={16} />
+                        )}
+                      </button>
 
-                    <input
-                      type="checkbox"
-                      checked={selectedGroups.includes(g._id)}
-                      onChange={() => toggleGroup(g)}
-                    />
+                      <input
+                        type="checkbox"
+                        checked={selectedGroups.includes(group._id)}
+                        onChange={() => toggleGroup(group)}
+                        disabled={isGroupLoading(group._id)}
+                      />
 
-                    <span className="font-medium">
-                      {g.name}
-                      <span className="text-xs text-gray-500 ml-1">
-                        ({g.contacts?.length || 0})
+                      <span className="font-medium">
+                        {group.name}
+                        <span className="text-xs text-gray-500 ml-1">
+                          ({group.contactCount || 0})
+                        </span>
                       </span>
-                    </span>
-                  </div>
-
-                  {expandedGroups.includes(g._id) && (
-                    <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {g.contacts?.map((c) => (
-                        <label
-                          key={c.phone}
-                          className="flex items-center gap-2"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={selectedContacts.includes(c.phone)}
-                            onChange={() => toggleContact(c.phone)}
-                          />
-                          <span className="text-sm">
-                            {c.name}
-                            <span className="text-xs text-gray-500 ml-1">
-                              (+{c.phone})
-                            </span>
-                          </span>
-                        </label>
-                      ))}
                     </div>
-                  )}
-                </div>
-              ))}
+
+                    {expandedGroups.includes(group._id) && (
+                      <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {isGroupLoading(group._id) ? (
+                          <p className="text-sm text-gray-500">Loading contacts...</p>
+                        ) : (group.contacts || []).length === 0 ? (
+                          <p className="text-sm text-gray-500">No contacts in this group.</p>
+                        ) : (
+                          group.contacts.map((contact) => (
+                            <label
+                              key={contact.phone}
+                              className="flex items-center gap-2"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={selectedContacts.includes(contact.phone)}
+                                onChange={() => toggleContact(contact.phone)}
+                              />
+                              <span className="text-sm">
+                                {contact.name}
+                                <span className="text-xs text-gray-500 ml-1">
+                                  (+{contact.phone})
+                                </span>
+                              </span>
+                            </label>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
             </div>
 
             <div className="flex justify-end gap-2 mt-4">
