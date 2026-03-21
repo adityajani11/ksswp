@@ -1,10 +1,14 @@
 import { useParams } from "react-router-dom";
 import { useEffect, useState } from "react";
-import api from "../utils/api";
+import api, { getApiErrorMessage } from "../utils/api";
 import Swal from "sweetalert2";
-import * as XLSX from "xlsx";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
+import { runWithSwalLoader } from "../utils/swalLoading";
+import { upsertCachedGroup } from "../utils/groupDirectory";
+import {
+  createExportGroup,
+  exportGroupToExcel,
+  exportGroupToPdf,
+} from "../utils/groupExport";
 
 export default function GroupDetails() {
   const { id } = useParams();
@@ -37,8 +41,9 @@ export default function GroupDetails() {
     try {
       setLoading(true);
       const res = await api.get(`/groups/${id}`);
-      setGroup(res.data);
-      setGroupName(res.data.name);
+      const nextGroup = upsertCachedGroup(res.data) || res.data;
+      setGroup(nextGroup);
+      setGroupName(nextGroup.name);
     } catch {
       Swal.fire("Error", "Group not found", "error");
       setGroup(null);
@@ -67,7 +72,7 @@ export default function GroupDetails() {
     });
 
     if (result.isConfirmed) {
-      onConfirm();
+      await onConfirm();
     }
   };
 
@@ -84,12 +89,20 @@ export default function GroupDetails() {
     }
 
     try {
-      const res = await api.post(`/groups/${id}/contacts`, {
-        name,
-        phone,
-      });
+      const res = await runWithSwalLoader(
+        {
+          title: "Adding contact",
+          text: "Saving the contact...",
+        },
+        () =>
+          api.post(`/groups/${id}/contacts`, {
+            name: name.trim(),
+            phone,
+          }),
+      );
 
-      setGroup(res.data);
+      const nextGroup = upsertCachedGroup(res.data) || res.data;
+      setGroup(nextGroup);
       setName("");
       setPhone("");
       setShowForm(false);
@@ -99,7 +112,7 @@ export default function GroupDetails() {
       Swal.fire(
         "Error",
         err.response?.data?.message || "Failed to add contact",
-        "error"
+        "error",
       );
     }
   };
@@ -119,16 +132,23 @@ export default function GroupDetails() {
     if (!result.isConfirmed) return;
 
     try {
-      const res = await api.delete(`/groups/${id}/contacts/${phone}`);
+      const res = await runWithSwalLoader(
+        {
+          title: "Deleting contact",
+          text: "Removing the contact from this group...",
+        },
+        () => api.delete(`/groups/${id}/contacts/${phone}`),
+      );
 
-      setGroup(res.data);
+      const nextGroup = upsertCachedGroup(res.data) || res.data;
+      setGroup(nextGroup);
 
       Swal.fire("Deleted", "Contact removed successfully", "success");
     } catch (err) {
       Swal.fire(
         "Error",
         err.response?.data?.message || "Failed to delete contact",
-        "error"
+        "error",
       );
     }
   };
@@ -138,11 +158,20 @@ export default function GroupDetails() {
     if (!groupName.trim()) return;
 
     try {
-      const res = await api.put(`/groups/${id}`, {
-        name: groupName,
-      });
+      const res = await runWithSwalLoader(
+        {
+          title: "Renaming group",
+          text: "Updating the group name...",
+        },
+        () =>
+          api.put(`/groups/${id}`, {
+            name: groupName.trim(),
+          }),
+      );
 
-      setGroup(res.data);
+      const nextGroup = upsertCachedGroup(res.data) || res.data;
+      setGroup(nextGroup);
+      setGroupName(nextGroup.name);
       setEditingGroup(false);
       Swal.fire("Updated", "Group renamed", "success");
     } catch {
@@ -169,12 +198,20 @@ export default function GroupDetails() {
     }
 
     try {
-      const res = await api.put(`/groups/${id}/contacts/${editingContact}`, {
-        name: editName,
-        phone: editPhone,
-      });
+      const res = await runWithSwalLoader(
+        {
+          title: "Updating contact",
+          text: "Saving contact changes...",
+        },
+        () =>
+          api.put(`/groups/${id}/contacts/${editingContact}`, {
+            name: editName.trim(),
+            phone: editPhone,
+          }),
+      );
 
-      setGroup(res.data);
+      const nextGroup = upsertCachedGroup(res.data) || res.data;
+      setGroup(nextGroup);
       setEditingContact(null);
 
       Swal.fire("Updated", "Contact updated", "success");
@@ -182,61 +219,62 @@ export default function GroupDetails() {
       Swal.fire(
         "Error",
         err.response?.data?.message || "Failed to update contact",
-        "error"
+        "error",
       );
     }
   };
 
   /* -------------------- EXPORT EXCEL -------------------- */
-  const exportExcel = () => {
+  const exportExcel = async () => {
     if (!filteredContacts.length) {
       Swal.fire("No data", "No contacts to export", "warning");
       return;
     }
 
-    confirmDownload("Excel", () => {
-      const data = buildExportData();
-
-      const ws = XLSX.utils.json_to_sheet(data, {
-        header: ["Sr No.", "Name", "Contact Number"],
+    try {
+      await confirmDownload("Excel", async () => {
+        await runWithSwalLoader(
+          {
+            title: "Exporting Excel",
+            text: "Preparing the Excel file...",
+          },
+          () =>
+            exportGroupToExcel(createExportGroup(group, filteredContacts)),
+        );
       });
-
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, group.name);
-
-      XLSX.writeFile(wb, `${group.name}_Contacts.xlsx`);
-    });
+    } catch (err) {
+      Swal.fire(
+        "Error",
+        getApiErrorMessage(err, "Failed to export Excel"),
+        "error",
+      );
+    }
   };
 
   /* -------------------- EXPORT PDF -------------------- */
-  const exportPDF = () => {
+  const exportPDF = async () => {
     if (!filteredContacts.length) {
       Swal.fire("No data", "No contacts to export", "warning");
       return;
     }
 
-    confirmDownload("PDF", () => {
-      const doc = new jsPDF();
-
-      doc.setFontSize(14);
-      doc.text(`Group: ${group.name}`, 14, 15);
-
-      const tableData = buildExportData().map((row) => [
-        row["Sr No."],
-        row.Name,
-        row["Contact Number"],
-      ]);
-
-      autoTable(doc, {
-        startY: 20,
-        head: [["Sr No.", "Name", "Contact Number"]],
-        body: tableData,
-        styles: { fontSize: 10 },
-        headStyles: { fillColor: [37, 99, 235] }, // Tailwind blue-600
+    try {
+      await confirmDownload("PDF", async () => {
+        await runWithSwalLoader(
+          {
+            title: "Exporting PDF",
+            text: "Preparing the PDF file...",
+          },
+          () => exportGroupToPdf(createExportGroup(group, filteredContacts)),
+        );
       });
-
-      doc.save(`${group.name}_Contacts.pdf`);
-    });
+    } catch (err) {
+      Swal.fire(
+        "Error",
+        getApiErrorMessage(err, "Failed to export PDF"),
+        "error",
+      );
+    }
   };
 
   /* -------------------- UI STATES -------------------- */
@@ -255,16 +293,8 @@ export default function GroupDetails() {
 
   const paginatedContacts = filteredContacts.slice(
     (currentPage - 1) * PAGE_SIZE,
-    currentPage * PAGE_SIZE
+    currentPage * PAGE_SIZE,
   );
-
-  /* ----------------- BUILD EXPORT DATA ----------------- */
-  const buildExportData = () =>
-    filteredContacts.map((c, index) => ({
-      "Sr No.": index + 1,
-      Name: c.name,
-      "Contact Number": `+${c.phone}`,
-    }));
 
   return (
     <div className="space-y-6">
@@ -415,7 +445,7 @@ export default function GroupDetails() {
                       value={editPhone}
                       onChange={(e) =>
                         setEditPhone(
-                          e.target.value.replace(/\D/g, "").slice(0, 10)
+                          e.target.value.replace(/\D/g, "").slice(0, 10),
                         )
                       }
                       className="border p-2 rounded flex-1"
@@ -445,14 +475,14 @@ export default function GroupDetails() {
                   <div className="flex gap-3">
                     <button
                       onClick={() => startEditContact(c)}
-                      className="text-blue-600"
+                      className="bg-blue-600 rounded px-2 text-white"
                     >
                       Edit
                     </button>
 
                     <button
                       onClick={() => deleteContact(c.phone)}
-                      className="text-red-600"
+                      className="bg-red-500 rounded px-2 text-white"
                     >
                       Delete
                     </button>

@@ -1,7 +1,12 @@
-import { useEffect, useState } from "react";
+import { useDeferredValue, useEffect, useState } from "react";
 import Swal from "sweetalert2";
 import api from "../utils/api";
+import { runWithSwalLoader } from "../utils/swalLoading";
 import { useNavigate } from "react-router-dom";
+import {
+  fetchGroupSummaries,
+  invalidateGroupDirectoryCache,
+} from "../utils/groupDirectory";
 
 export default function Groups() {
   const [groups, setGroups] = useState([]);
@@ -10,13 +15,13 @@ export default function Groups() {
   const [showForm, setShowForm] = useState(false);
   const [search, setSearch] = useState("");
   const navigate = useNavigate();
+  const deferredSearch = useDeferredValue(search);
 
-  const fetchGroups = async () => {
+  const fetchGroups = async ({ force = false } = {}) => {
     try {
       setLoading(true);
-      const res = await api.get("/groups");
-
-      setGroups(Array.isArray(res.data) ? res.data : []);
+      const nextGroups = await fetchGroupSummaries({ force });
+      setGroups(Array.isArray(nextGroups) ? nextGroups : []);
     } catch (err) {
       console.error("Fetch groups failed:", err);
       setGroups([]);
@@ -31,7 +36,7 @@ export default function Groups() {
   }, []);
 
   const filteredGroups = groups.filter((group) =>
-    group.name.toLowerCase().includes(search.toLowerCase()),
+    group.name.toLowerCase().includes(deferredSearch.toLowerCase()),
   );
 
   const createGroup = async () => {
@@ -41,10 +46,18 @@ export default function Groups() {
     }
 
     try {
-      await api.post("/groups", { name });
+      await runWithSwalLoader(
+        {
+          title: "Creating group",
+          text: "Saving the new group...",
+        },
+        () => api.post("/groups", { name: name.trim() }),
+      );
+
+      invalidateGroupDirectoryCache();
       setName("");
       setShowForm(false);
-      await fetchGroups();
+      await fetchGroups({ force: true });
 
       Swal.fire("Created", "Group created successfully", "success");
     } catch (err) {
@@ -57,7 +70,7 @@ export default function Groups() {
   };
 
   const deleteGroup = async (group) => {
-    const count = group.contacts?.length || 0;
+    const count = group.contactCount || 0;
 
     const result = await Swal.fire({
       title: "Delete group?",
@@ -80,10 +93,17 @@ export default function Groups() {
     if (!result.isConfirmed) return;
 
     try {
-      await api.delete(`/groups/${group._id}`);
+      await runWithSwalLoader(
+        {
+          title: "Deleting group",
+          text: "Removing the group and its contacts...",
+        },
+        () => api.delete(`/groups/${group._id}`),
+      );
 
+      invalidateGroupDirectoryCache();
+      await fetchGroups({ force: true });
       Swal.fire("Deleted", "Group deleted successfully", "success");
-      fetchGroups();
     } catch (err) {
       Swal.fire(
         "Error",
@@ -176,7 +196,7 @@ export default function Groups() {
                   e.stopPropagation();
                   deleteGroup(group);
                 }}
-                className="absolute top-3 right-5 text-red-600 hover:text-red-800"
+                className="absolute top-3 right-5 bg-red-500 rounded px-2 text-white"
                 title="Delete group"
               >
                 Delete
@@ -184,7 +204,7 @@ export default function Groups() {
 
               <h4 className="font-semibold text-lg">{group.name}</h4>
               <p className="text-sm text-gray-500">
-                {group.contacts?.length || 0} contacts
+                {group.contactCount || 0} contacts
               </p>
             </div>
           ))}

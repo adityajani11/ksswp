@@ -1,6 +1,7 @@
 import { useState } from "react";
 import Swal from "sweetalert2";
 import api from "../utils/api";
+import { runWithSwalLoader } from "../utils/swalLoading";
 
 export default function AddContactModal({ onClose, onSaved }) {
   const [name, setName] = useState("");
@@ -24,10 +25,17 @@ export default function AddContactModal({ onClose, onSaved }) {
     try {
       setLoading(true);
 
-      await api.post("/contacts", {
-        name: name.trim(),
-        phone: phone.trim(),
-      });
+      await runWithSwalLoader(
+        {
+          title: "Adding contact",
+          text: "Saving the contact...",
+        },
+        () =>
+          api.post("/contacts", {
+            name: name.trim(),
+            phone: phone.trim(),
+          }),
+      );
 
       Swal.fire({
         icon: "success",

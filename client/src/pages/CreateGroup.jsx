@@ -1,6 +1,8 @@
 import { useState } from "react";
 import api from "../utils/api";
 import Swal from "sweetalert2";
+import { runWithSwalLoader } from "../utils/swalLoading";
+import { invalidateGroupDirectoryCache } from "../utils/groupDirectory";
 
 export default function CreateGroup() {
   const [name, setName] = useState("");
@@ -9,7 +11,14 @@ export default function CreateGroup() {
     if (!name.trim()) return;
 
     try {
-      await api.post("/groups", { name });
+      await runWithSwalLoader(
+        {
+          title: "Creating group",
+          text: "Saving the new group...",
+        },
+        () => api.post("/groups", { name: name.trim() }),
+      );
+      invalidateGroupDirectoryCache();
       Swal.fire("Success", "Group created", "success");
       setName("");
     } catch (err) {

@@ -31,4 +31,7 @@ const groupSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+groupSchema.index({ createdAt: -1 });
+groupSchema.index({ "contacts.phone": 1 });
+
 module.exports = mongoose.model("Group", groupSchema);
