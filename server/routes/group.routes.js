@@ -2,6 +2,8 @@ const express = require("express");
 const mongoose = require("mongoose");
 const router = express.Router();
 const Group = require("../models/Group");
+const auth = require("../middleware/auth");
+const requireActionPassword = require("../middleware/requireActionPassword");
 
 const LOCAL_PHONE_REGEX = /^\d{10}$/;
 const STORED_PHONE_REGEX = /^91\d{10}$/;
@@ -395,7 +397,7 @@ router.put("/:groupId/contacts/:phone", async (req, res) => {
 /**
  * Bulk Delete Contacts from Group
  */
-router.post("/:groupId/contacts/delete", async (req, res) => {
+router.post("/:groupId/contacts/delete", auth, requireActionPassword, async (req, res) => {
   try {
     const { groupId } = req.params;
     const phones = normalizeRequestedPhones(req.body?.phones);
@@ -501,7 +503,7 @@ router.post("/:groupId/contacts/move", async (req, res) => {
 /**
  * Delete Contact from Group
  */
-router.delete("/:groupId/contacts/:phone", async (req, res) => {
+router.delete("/:groupId/contacts/:phone", auth, requireActionPassword, async (req, res) => {
   const { groupId, phone } = req.params;
 
   const group = await Group.findById(groupId);
@@ -524,7 +526,7 @@ router.delete("/:groupId/contacts/:phone", async (req, res) => {
 /**
  * Delete Group
  */
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", auth, requireActionPassword, async (req, res) => {
   const group = await Group.findById(req.params.id);
 
   if (!group) {
