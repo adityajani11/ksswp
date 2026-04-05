@@ -4,6 +4,7 @@ import api from "../utils/api";
 import { runWithSwalLoader } from "../utils/swalLoading";
 import { useNavigate } from "react-router-dom";
 import {
+  fetchGroupsByIds,
   fetchGroupSummaries,
   invalidateGroupDirectoryCache,
 } from "../utils/groupDirectory";
@@ -13,9 +14,13 @@ export default function Groups() {
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState("");
   const [showForm, setShowForm] = useState(false);
-  const [search, setSearch] = useState("");
+  const [groupSearch, setGroupSearch] = useState("");
+  const [contactSearch, setContactSearch] = useState("");
+  const [matchingContacts, setMatchingContacts] = useState([]);
+  const [searchingContacts, setSearchingContacts] = useState(false);
   const navigate = useNavigate();
-  const deferredSearch = useDeferredValue(search);
+  const deferredGroupSearch = useDeferredValue(groupSearch);
+  const deferredContactSearch = useDeferredValue(contactSearch);
 
   const fetchGroups = async ({ force = false } = {}) => {
     try {
@@ -35,8 +40,85 @@ export default function Groups() {
     fetchGroups();
   }, []);
 
+  useEffect(() => {
+    const rawQuery = String(deferredContactSearch || "").trim();
+
+    if (!rawQuery) {
+      setMatchingContacts([]);
+      setSearchingContacts(false);
+      return undefined;
+    }
+
+    const query = rawQuery.toLowerCase();
+    const phoneQuery = rawQuery.replace(/\D/g, "");
+    const summarySearch = phoneQuery || rawQuery;
+    let cancelled = false;
+
+    const runContactSearch = async () => {
+      setSearchingContacts(true);
+
+      try {
+        const summaryMatches = await fetchGroupSummaries({ search: summarySearch });
+
+        if (cancelled || !summaryMatches.length) {
+          if (!cancelled) {
+            setMatchingContacts([]);
+          }
+          return;
+        }
+
+        const detailedGroups = await fetchGroupsByIds(
+          summaryMatches.map((group) => group._id),
+        );
+
+        if (cancelled) {
+          return;
+        }
+
+        const nextMatchingContacts = detailedGroups.flatMap((group) =>
+          (group.contacts || [])
+            .filter((contact) => {
+              const contactName = String(contact.name || "").toLowerCase();
+              const contactPhone = String(contact.phone || "");
+              const matchesName = contactName.includes(query);
+              const matchesPhone = phoneQuery ? contactPhone.includes(phoneQuery) : false;
+              return matchesName || matchesPhone;
+            })
+            .map((contact) => ({
+              key: `${group._id}-${contact.phone}-${contact.name || ""}`,
+              groupId: group._id,
+              groupName: group.name || "Unknown group",
+              name: contact.name || "Unnamed contact",
+              phone: String(contact.phone || ""),
+            })),
+        );
+
+        setMatchingContacts(nextMatchingContacts);
+      } catch (err) {
+        if (!cancelled) {
+          setMatchingContacts([]);
+          Swal.fire(
+            "Error",
+            err.response?.data?.message || "Failed to search contacts",
+            "error",
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setSearchingContacts(false);
+        }
+      }
+    };
+
+    runContactSearch();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [deferredContactSearch, groups]);
+
   const filteredGroups = groups.filter((group) =>
-    group.name.toLowerCase().includes(deferredSearch.toLowerCase()),
+    group.name.toLowerCase().includes(deferredGroupSearch.toLowerCase()),
   );
 
   const createGroup = async () => {
@@ -135,14 +217,56 @@ export default function Groups() {
 
       {/* Search */}
       {groups.length > 0 && (
-        <div className="max-w-md">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-w-3xl">
           <input
             type="text"
             placeholder="Search groups..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            value={groupSearch}
+            onChange={(e) => setGroupSearch(e.target.value)}
             className="w-full border p-2 rounded"
           />
+          <input
+            type="text"
+            placeholder="Search contact by name or number..."
+            value={contactSearch}
+            onChange={(e) => setContactSearch(e.target.value)}
+            className="w-full border p-2 rounded"
+          />
+        </div>
+      )}
+
+      {String(contactSearch || "").trim() && (
+        <div className="space-y-2">
+          <h3 className="text-sm font-semibold text-gray-700">
+            Contact Search Results
+          </h3>
+
+          <div className="bg-white rounded shadow border overflow-hidden">
+            {searchingContacts ? (
+              <p className="p-3 text-sm text-gray-500">Searching contacts...</p>
+            ) : matchingContacts.length === 0 ? (
+              <p className="p-3 text-sm text-gray-500">
+                No contacts match your search.
+              </p>
+            ) : (
+              matchingContacts.map((contact) => (
+                <button
+                  key={contact.key}
+                  type="button"
+                  onClick={() => navigate(`/dashboard/groups/${contact.groupId}`)}
+                  className="w-full p-3 text-left border-b last:border-b-0 hover:bg-gray-50"
+                >
+                  <div className="font-medium text-sm">{contact.name}</div>
+                  <div className="text-sm text-gray-600 flex flex-wrap items-center gap-2 mt-0.5">
+                    <span>+{contact.phone}</span>
+                    <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
+                      {contact.groupName}
+                    </span>
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
         </div>
       )}
 
