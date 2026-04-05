@@ -1,6 +1,6 @@
 import { useDeferredValue, useEffect, useRef, useState } from "react";
 import Swal from "sweetalert2";
-import { getApiErrorMessage } from "../utils/api";
+import api, { getApiErrorMessage } from "../utils/api";
 import { fetchGroupSummaries, fetchGroupsByIds } from "../utils/groupDirectory";
 
 function mergeGroupsById(baseGroups, incomingGroups) {
@@ -103,22 +103,47 @@ function buildRecipientsPayload(groups, selectedContacts) {
   });
 }
 
+function normalizeBatch(batch) {
+  const groupIds = uniqueItems(
+    (Array.isArray(batch?.groupIds) ? batch.groupIds : [])
+      .map((groupId) => String(groupId || "").trim())
+      .filter(Boolean),
+  );
+
+  return {
+    _id: String(batch?._id || ""),
+    name: String(batch?.name || ""),
+    groupIds,
+    groupCount: Number(batch?.groupCount ?? groupIds.length),
+    contactCount: Number(batch?.contactCount ?? 0),
+    createdAt: batch?.createdAt || null,
+    updatedAt: batch?.updatedAt || null,
+  };
+}
+
 export default function useRecipientGroups() {
   const [groups, setGroups] = useState([]);
   const [searchResults, setSearchResults] = useState([]);
+  const [batches, setBatches] = useState([]);
   const [groupsLoading, setGroupsLoading] = useState(false);
+  const [batchesLoading, setBatchesLoading] = useState(false);
   const [searchLoading, setSearchLoading] = useState(false);
   const [loadingGroupIds, setLoadingGroupIds] = useState([]);
   const [selectionLoading, setSelectionLoading] = useState(false);
   const [selectedGroups, setSelectedGroups] = useState([]);
+  const [_manuallySelectedGroups, setManuallySelectedGroups] = useState([]);
+  const [selectedBatches, setSelectedBatches] = useState([]);
   const [selectedContacts, setSelectedContacts] = useState([]);
-  const [manuallyDeselected, setManuallyDeselected] = useState([]);
+  const [_manuallyDeselected, setManuallyDeselected] = useState([]);
   const [expandedGroups, setExpandedGroups] = useState([]);
   const [search, setSearch] = useState("");
 
   const deferredSearch = useDeferredValue(search);
   const groupsRef = useRef([]);
+  const batchesRef = useRef([]);
   const selectedGroupsRef = useRef([]);
+  const manuallySelectedGroupsRef = useRef([]);
+  const selectedBatchesRef = useRef([]);
   const selectedContactsRef = useRef([]);
   const manuallyDeselectedRef = useRef([]);
 
@@ -128,10 +153,28 @@ export default function useRecipientGroups() {
     return nextGroups;
   };
 
+  const syncBatches = (nextBatches) => {
+    batchesRef.current = nextBatches;
+    setBatches(nextBatches);
+    return nextBatches;
+  };
+
   const syncSelectedGroups = (nextSelectedGroups) => {
     selectedGroupsRef.current = nextSelectedGroups;
     setSelectedGroups(nextSelectedGroups);
     return nextSelectedGroups;
+  };
+
+  const syncManuallySelectedGroups = (nextManuallySelectedGroups) => {
+    manuallySelectedGroupsRef.current = nextManuallySelectedGroups;
+    setManuallySelectedGroups(nextManuallySelectedGroups);
+    return nextManuallySelectedGroups;
+  };
+
+  const syncSelectedBatches = (nextSelectedBatches) => {
+    selectedBatchesRef.current = nextSelectedBatches;
+    setSelectedBatches(nextSelectedBatches);
+    return nextSelectedBatches;
   };
 
   const syncSelectedContacts = (nextSelectedContacts) => {
@@ -170,6 +213,37 @@ export default function useRecipientGroups() {
     } finally {
       setGroupsLoading(false);
     }
+  };
+
+  const ensureBatchesLoaded = async ({ force = false } = {}) => {
+    if (batchesRef.current.length && !force) {
+      return batchesRef.current;
+    }
+
+    setBatchesLoading(true);
+
+    try {
+      const res = await api.get("/batches");
+      const nextBatches = (Array.isArray(res.data) ? res.data : [])
+        .map((batch) => normalizeBatch(batch))
+        .filter((batch) => batch._id);
+
+      return syncBatches(nextBatches);
+    } catch (err) {
+      Swal.fire("Error", getApiErrorMessage(err, "Failed to load batches"), "error");
+      return null;
+    } finally {
+      setBatchesLoading(false);
+    }
+  };
+
+  const ensureSelectionOptionsLoaded = async () => {
+    const [nextGroups] = await Promise.all([
+      ensureGroupSummariesLoaded(),
+      ensureBatchesLoaded(),
+    ]);
+
+    return nextGroups;
   };
 
   const ensureGroupDetailsLoaded = async (groupIds, { force = false } = {}) => {
@@ -215,8 +289,65 @@ export default function useRecipientGroups() {
     return syncSelectedContacts(nextSelectedContacts);
   };
 
+  const buildSelectedGroupIdsFromSources = (
+    nextManuallySelectedGroups = manuallySelectedGroupsRef.current,
+    nextSelectedBatches = selectedBatchesRef.current,
+  ) => {
+    const selectedBatchIdSet = new Set(
+      nextSelectedBatches.map((batchId) => String(batchId)),
+    );
+    const batchGroupIds = [];
+
+    for (const batch of batchesRef.current) {
+      if (!selectedBatchIdSet.has(String(batch._id))) {
+        continue;
+      }
+
+      for (const groupId of batch.groupIds || []) {
+        batchGroupIds.push(String(groupId));
+      }
+    }
+
+    return uniqueItems([
+      ...nextManuallySelectedGroups.map((groupId) => String(groupId)),
+      ...batchGroupIds,
+    ]);
+  };
+
+  const applySelectionFromSources = ({
+    nextManuallySelectedGroups = manuallySelectedGroupsRef.current,
+    nextSelectedBatches = selectedBatchesRef.current,
+    nextManuallyDeselected = manuallyDeselectedRef.current,
+    resetManuallyDeselected = false,
+    expandSelectedGroups = false,
+  } = {}) => {
+    const nextSelectedGroupIds = buildSelectedGroupIdsFromSources(
+      nextManuallySelectedGroups,
+      nextSelectedBatches,
+    );
+
+    syncManuallySelectedGroups(nextManuallySelectedGroups);
+    syncSelectedBatches(nextSelectedBatches);
+    syncSelectedGroups(nextSelectedGroupIds);
+
+    const appliedManuallyDeselected = resetManuallyDeselected
+      ? []
+      : nextManuallyDeselected;
+
+    syncManuallyDeselected(appliedManuallyDeselected);
+    recalculateSelectedContacts(nextSelectedGroupIds, appliedManuallyDeselected);
+
+    if (expandSelectedGroups && nextSelectedGroupIds.length) {
+      setExpandedGroups((prev) => uniqueItems([...prev, ...nextSelectedGroupIds]));
+    }
+
+    return nextSelectedGroupIds;
+  };
+
   const resetSelection = () => {
     syncSelectedGroups([]);
+    syncManuallySelectedGroups([]);
+    syncSelectedBatches([]);
     syncSelectedContacts([]);
     syncManuallyDeselected([]);
     setExpandedGroups([]);
@@ -249,13 +380,42 @@ export default function useRecipientGroups() {
       return;
     }
 
-    const isSelected = selectedGroupsRef.current.includes(groupId);
-    const nextSelectedGroups = isSelected
-      ? removeItem(selectedGroupsRef.current, groupId)
-      : [...selectedGroupsRef.current, groupId];
+    const isManuallySelected = manuallySelectedGroupsRef.current.includes(groupId);
+    const nextManuallySelectedGroups = isManuallySelected
+      ? removeItem(manuallySelectedGroupsRef.current, groupId)
+      : [...manuallySelectedGroupsRef.current, groupId];
 
-    syncSelectedGroups(nextSelectedGroups);
-    recalculateSelectedContacts(nextSelectedGroups);
+    applySelectionFromSources({
+      nextManuallySelectedGroups,
+      nextSelectedBatches: selectedBatchesRef.current,
+    });
+  };
+
+  const toggleBatch = async (batch) => {
+    const batchId = String(batch._id);
+    const batchGroupIds = uniqueItems(
+      (batch.groupIds || []).map((groupId) => String(groupId)),
+    );
+
+    if (!batchGroupIds.length) {
+      return;
+    }
+
+    const nextGroups = await ensureGroupDetailsLoaded(batchGroupIds);
+    if (!nextGroups) {
+      return;
+    }
+
+    const isBatchSelected = selectedBatchesRef.current.includes(batchId);
+    const nextSelectedBatches = isBatchSelected
+      ? removeItem(selectedBatchesRef.current, batchId)
+      : [...selectedBatchesRef.current, batchId];
+
+    applySelectionFromSources({
+      nextManuallySelectedGroups: manuallySelectedGroupsRef.current,
+      nextSelectedBatches,
+      expandSelectedGroups: !isBatchSelected,
+    });
   };
 
   const toggleContact = (phone) => {
@@ -273,25 +433,59 @@ export default function useRecipientGroups() {
   };
 
   const selectAll = async () => {
-    const availableGroups = await ensureGroupSummariesLoaded();
-    if (!availableGroups) {
-      return;
-    }
-
-    const allGroupIds = availableGroups.map((group) => group._id);
-
     setSelectionLoading(true);
 
     try {
-      const nextGroups = await ensureGroupDetailsLoaded(allGroupIds);
+      const query = String(search || "").trim();
+      let groupsToSelect = [];
+
+      if (query) {
+        const summaries = await fetchGroupSummaries({ search: query });
+        groupsToSelect = overlayGroupsById(
+          Array.isArray(summaries) ? summaries : [],
+          groupsRef.current.filter((group) => group.contactsLoaded),
+        );
+        setSearchResults(groupsToSelect);
+      } else {
+        const availableGroups = await ensureGroupSummariesLoaded();
+        if (!availableGroups) {
+          return;
+        }
+
+        groupsToSelect = availableGroups;
+      }
+
+      const targetGroupIds = uniqueItems(
+        groupsToSelect.map((group) => String(group._id)),
+      );
+
+      if (!targetGroupIds.length) {
+        resetSelection();
+        return;
+      }
+
+      const nextGroups = await ensureGroupDetailsLoaded(targetGroupIds);
       if (!nextGroups) {
         return;
       }
 
-      syncSelectedGroups(allGroupIds);
-      syncManuallyDeselected([]);
-      setExpandedGroups(allGroupIds);
-      recalculateSelectedContacts(allGroupIds, []);
+      const nextManuallySelectedGroups = uniqueItems([
+        ...manuallySelectedGroupsRef.current.map((groupId) => String(groupId)),
+        ...targetGroupIds,
+      ]);
+
+      applySelectionFromSources({
+        nextManuallySelectedGroups,
+        nextSelectedBatches: selectedBatchesRef.current,
+        resetManuallyDeselected: true,
+        expandSelectedGroups: true,
+      });
+    } catch (err) {
+      Swal.fire(
+        "Error",
+        getApiErrorMessage(err, "Failed to select contacts"),
+        "error",
+      );
     } finally {
       setSelectionLoading(false);
     }
@@ -354,27 +548,40 @@ export default function useRecipientGroups() {
     };
   }, [deferredSearch]);
 
-  const visibleGroups = String(deferredSearch || "").trim()
-    ? searchResults
-    : groups;
+  const trimmedDeferredSearch = String(deferredSearch || "").trim();
+  const visibleGroups = trimmedDeferredSearch ? searchResults : groups;
+  const visibleBatches = trimmedDeferredSearch
+    ? batches.filter((batch) =>
+        String(batch.name || "")
+          .toLowerCase()
+          .includes(trimmedDeferredSearch.toLowerCase()),
+      )
+    : batches;
 
   return {
     groups: visibleGroups,
+    batches: visibleBatches,
     groupsLoading,
+    batchesLoading,
     searchLoading,
     selectionLoading,
     selectedGroups,
+    selectedBatches,
     selectedContacts,
     expandedGroups,
     search,
     setSearch,
     ensureGroupSummariesLoaded,
+    ensureBatchesLoaded,
+    ensureSelectionOptionsLoaded,
     buildRecipientPayload,
     discardSelection: resetSelection,
     isGroupLoading: (groupId) => loadingGroupIds.includes(String(groupId)),
     toggleContact,
     toggleGroup,
+    toggleBatch,
     toggleGroupExpand,
     selectAll,
   };
 }
+

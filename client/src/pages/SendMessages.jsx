@@ -13,20 +13,24 @@ export default function SendGroupMessages() {
   const [showGroupModal, setShowGroupModal] = useState(false);
   const {
     groups,
+    batches,
     groupsLoading,
+    batchesLoading,
     searchLoading,
     selectionLoading,
     selectedGroups,
+    selectedBatches,
     selectedContacts,
     expandedGroups,
     search,
     setSearch,
-    ensureGroupSummariesLoaded,
+    ensureSelectionOptionsLoaded,
     buildRecipientPayload,
     discardSelection,
     isGroupLoading,
     toggleContact,
     toggleGroup,
+    toggleBatch,
     toggleGroupExpand,
     selectAll,
   } = useRecipientGroups();
@@ -85,7 +89,7 @@ export default function SendGroupMessages() {
     setSearch("");
     setShowGroupModal(true);
 
-    const nextGroups = await ensureGroupSummariesLoaded();
+    const nextGroups = await ensureSelectionOptionsLoaded();
     if (!nextGroups) {
       setShowGroupModal(false);
     }
@@ -273,9 +277,13 @@ export default function SendGroupMessages() {
                     {expandedGroups.includes(group._id) && (
                       <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
                         {isGroupLoading(group._id) ? (
-                          <p className="text-sm text-gray-500">Loading contacts...</p>
+                          <p className="text-sm text-gray-500">
+                            Loading contacts...
+                          </p>
                         ) : (group.contacts || []).length === 0 ? (
-                          <p className="text-sm text-gray-500">No contacts in this group.</p>
+                          <p className="text-sm text-gray-500">
+                            No contacts in this group.
+                          </p>
                         ) : (
                           group.contacts.map((contact) => (
                             <label
@@ -285,7 +293,9 @@ export default function SendGroupMessages() {
                               <input
                                 type="checkbox"
                                 className="me-2"
-                                checked={selectedContacts.includes(contact.phone)}
+                                checked={selectedContacts.includes(
+                                  contact.phone,
+                                )}
                                 onChange={() => toggleContact(contact.phone)}
                               />
                               <span>
@@ -301,6 +311,42 @@ export default function SendGroupMessages() {
                     )}
                   </div>
                 ))
+              )}
+            </div>
+
+            <div className="mt-3 border rounded p-3 space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Batches
+              </p>
+
+              {batchesLoading ? (
+                <p className="text-sm text-gray-500">Loading batches...</p>
+              ) : batches.length === 0 ? (
+                <p className="text-sm text-gray-500">No batches found.</p>
+              ) : (
+                <div className="space-y-2">
+                  {batches.map((batch) => (
+                    <label
+                      key={batch._id}
+                      className="flex items-start gap-2 text-sm cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedBatches.includes(batch._id)}
+                        onChange={() => toggleBatch(batch)}
+                        disabled={selectionLoading}
+                        className="me-2"
+                      />
+                      <span>
+                        {batch.name}
+                        <span className="text-xs text-gray-500 ml-1">
+                          ({batch.groupCount || batch.groupIds?.length || 0}{" "}
+                          groups, {batch.contactCount || 0} contacts)
+                        </span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
               )}
             </div>
 

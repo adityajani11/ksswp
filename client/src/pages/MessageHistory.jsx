@@ -3,6 +3,11 @@ import api, { getApiErrorMessage } from "../utils/api";
 import Swal from "sweetalert2";
 import { calculateCampaignProgress } from "../utils/campaignProgress";
 import { runWithSwalLoader } from "../utils/swalLoading";
+import {
+  promptLoginPasswordForDelete,
+  SECURITY_MODAL_OPTIONS,
+  withActionPasswordHeader,
+} from "../utils/security";
 
 const FINAL_STATUSES = new Set(["completed", "completed_with_failures", "failed"]);
 
@@ -190,9 +195,13 @@ export default function MessageHistory() {
       showCancelButton: true,
       confirmButtonText: "Delete",
       confirmButtonColor: "#dc2626",
+      ...SECURITY_MODAL_OPTIONS,
     });
 
     if (!result.isConfirmed) return;
+
+    const loginPassword = await promptLoginPasswordForDelete();
+    if (!loginPassword) return;
 
     try {
       setDeleting(true);
@@ -201,7 +210,11 @@ export default function MessageHistory() {
           title: "Deleting history",
           text: "Removing this campaign history...",
         },
-        () => api.delete(`/whatsapp/queue/campaign/${selectedCampaignId}`),
+        () =>
+          api.delete(
+            `/whatsapp/queue/campaign/${selectedCampaignId}`,
+            withActionPasswordHeader(loginPassword),
+          ),
       );
       setDetails(null);
       setSelectedCampaignId(null);
@@ -226,9 +239,13 @@ export default function MessageHistory() {
       showCancelButton: true,
       confirmButtonText: "Clear All",
       confirmButtonColor: "#dc2626",
+      ...SECURITY_MODAL_OPTIONS,
     });
 
     if (!result.isConfirmed) return;
+
+    const loginPassword = await promptLoginPasswordForDelete();
+    if (!loginPassword) return;
 
     try {
       setDeleting(true);
@@ -237,7 +254,11 @@ export default function MessageHistory() {
           title: "Clearing history",
           text: "Removing previous campaign history...",
         },
-        () => api.delete("/whatsapp/queue/campaigns"),
+        () =>
+          api.delete(
+            "/whatsapp/queue/campaigns",
+            withActionPasswordHeader(loginPassword),
+          ),
       );
       setDetails(null);
       setSelectedCampaignId(null);

@@ -1,8 +1,18 @@
 import { NavLink, useNavigate } from "react-router-dom";
-import { Users, Send, LogOut, Menu, X, History, FileDown } from "lucide-react";
-import { useState } from "react";
+import {
+  Users,
+  Send,
+  LogOut,
+  Menu,
+  X,
+  History,
+  FileDown,
+  Layers3,
+  KeyRound,
+} from "lucide-react";
+import { useEffect, useState } from "react";
 import Swal from "sweetalert2";
-import { getApiErrorMessage } from "../utils/api";
+import api, { getApiErrorMessage } from "../utils/api";
 import { runWithSwalLoader } from "../utils/swalLoading";
 import { fetchAllGroupsWithContacts } from "../utils/groupDirectory";
 import {
@@ -10,6 +20,12 @@ import {
   exportGroupsToExcel,
   exportGroupsToPdfZip,
 } from "../utils/groupExport";
+import {
+  DEVELOPER_PASSWORD,
+  promptDeveloperPassword,
+  promptNewLoginPassword,
+  SECURITY_MODAL_OPTIONS,
+} from "../utils/security";
 
 const NO_GROUPS_TO_EXPORT = "NO_GROUPS_TO_EXPORT";
 const PDF_EXPORT_OPTIONS_POPUP_CLASS = "pdf-export-options-popup";
@@ -90,6 +106,26 @@ export default function Sidebar() {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
 
+  useEffect(() => {
+    if (!open) {
+      return undefined;
+    }
+
+    const originalBodyOverflow = document.body.style.overflow;
+    const originalHtmlOverflow = document.documentElement.style.overflow;
+    const originalBodyTouchAction = document.body.style.touchAction;
+
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+    document.body.style.touchAction = "none";
+
+    return () => {
+      document.body.style.overflow = originalBodyOverflow;
+      document.documentElement.style.overflow = originalHtmlOverflow;
+      document.body.style.touchAction = originalBodyTouchAction;
+    };
+  }, [open]);
+
   const linkBase =
     "flex items-center gap-3 p-2.5 rounded-lg transition-all no-underline";
 
@@ -101,6 +137,8 @@ export default function Sidebar() {
     }`;
 
   const actionStyle = `${linkBase} w-full text-left border-0 bg-yellow-600 rounded text-white`;
+  const securityActionStyle =
+    `${linkBase} w-full text-left border border-blue-100 bg-blue-50 text-blue-700`;
 
   const handleLogout = async () => {
     const result = await Swal.fire({
@@ -110,6 +148,7 @@ export default function Sidebar() {
       showCancelButton: true,
       confirmButtonText: "Yes, Logout",
       cancelButtonText: "Cancel",
+      ...SECURITY_MODAL_OPTIONS,
     });
 
     if (!result.isConfirmed) return;
@@ -124,6 +163,59 @@ export default function Sidebar() {
     });
 
     navigate("/");
+  };
+
+  const handleChangePassword = async () => {
+    setOpen(false);
+
+    const developerPassword = await promptDeveloperPassword();
+    if (!developerPassword) {
+      return;
+    }
+
+    if (developerPassword !== DEVELOPER_PASSWORD) {
+      await Swal.fire({
+        title: "Access denied",
+        text: "Developer password is incorrect",
+        icon: "error",
+        ...SECURITY_MODAL_OPTIONS,
+      });
+      return;
+    }
+
+    const nextPasswordPayload = await promptNewLoginPassword();
+    if (!nextPasswordPayload) {
+      return;
+    }
+
+    try {
+      await runWithSwalLoader(
+        {
+          title: "Updating password",
+          text: "Saving your new login password...",
+        },
+        () =>
+          api.post("/auth/change-password", {
+            developerPassword,
+            newPassword: nextPasswordPayload.newPassword,
+            confirmPassword: nextPasswordPayload.confirmPassword,
+          }),
+      );
+
+      Swal.fire({
+        title: "Updated",
+        text: "Login password updated successfully",
+        icon: "success",
+        ...SECURITY_MODAL_OPTIONS,
+      });
+    } catch (err) {
+      Swal.fire({
+        title: "Error",
+        text: getApiErrorMessage(err, "Failed to update login password"),
+        icon: "error",
+        ...SECURITY_MODAL_OPTIONS,
+      });
+    }
   };
 
   const handleExportAllData = async () => {
@@ -206,7 +298,7 @@ export default function Sidebar() {
       <aside
         className={`
           fixed top-0 left-0 z-50
-          w-64 min-h-screen bg-white border-r flex flex-col
+          w-64 h-screen overflow-y-auto overscroll-contain bg-white border-r flex flex-col
           transform transition-transform duration-300
           ${open ? "translate-x-0" : "-translate-x-full"}
           md:translate-x-0
@@ -231,6 +323,14 @@ export default function Sidebar() {
           >
             <Users size={18} />
             <span className="font-medium">Groups</span>
+          </NavLink>
+          <NavLink
+            to="/dashboard/batches"
+            className={linkStyle}
+            onClick={() => setOpen(false)}
+          >
+            <Layers3 size={18} />
+            <span className="font-medium">Batches</span>
           </NavLink>
           <NavLink
             to="/dashboard/send"
@@ -279,6 +379,14 @@ export default function Sidebar() {
           >
             <FileDown size={18} />
             <span className="font-medium">Export All Data</span>
+          </button>
+          <button
+            type="button"
+            onClick={handleChangePassword}
+            className={securityActionStyle}
+          >
+            <KeyRound size={18} />
+            <span className="font-medium">Change Password</span>
           </button>
         </nav>
 
