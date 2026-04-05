@@ -13,6 +13,11 @@ import {
   exportGroupToExcel,
   exportGroupToPdf,
 } from "../utils/groupExport";
+import {
+  promptLoginPasswordForDelete,
+  SECURITY_MODAL_OPTIONS,
+  withActionPasswordHeader,
+} from "../utils/security";
 
 const PAGE_SIZE = 20;
 
@@ -297,9 +302,13 @@ export default function GroupDetails() {
       confirmButtonText: "Yes, Delete",
       cancelButtonText: "Cancel",
       confirmButtonColor: "#dc2626",
+      ...SECURITY_MODAL_OPTIONS,
     });
 
     if (!result.isConfirmed) return;
+
+    const loginPassword = await promptLoginPasswordForDelete();
+    if (!loginPassword) return;
 
     try {
       const res = await runWithSwalLoader(
@@ -307,7 +316,11 @@ export default function GroupDetails() {
           title: "Deleting contact",
           text: "Removing the contact from this group...",
         },
-        () => api.delete(`/groups/${id}/contacts/${contactPhone}`),
+        () =>
+          api.delete(
+            `/groups/${id}/contacts/${contactPhone}`,
+            withActionPasswordHeader(loginPassword),
+          ),
       );
 
       const nextGroup = upsertCachedGroup(res.data) || res.data;
@@ -413,9 +426,15 @@ export default function GroupDetails() {
       showCancelButton: true,
       confirmButtonText: "Yes, Delete",
       confirmButtonColor: "#dc2626",
+      ...SECURITY_MODAL_OPTIONS,
     });
 
     if (!result.isConfirmed) {
+      return;
+    }
+
+    const loginPassword = await promptLoginPasswordForDelete();
+    if (!loginPassword) {
       return;
     }
 
@@ -428,7 +447,7 @@ export default function GroupDetails() {
         () =>
           api.post(`/groups/${id}/contacts/delete`, {
             phones: phonesToDelete,
-          }),
+          }, withActionPasswordHeader(loginPassword)),
       );
 
       const nextGroup = upsertCachedGroup(res.data?.group) || res.data?.group;

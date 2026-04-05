@@ -5,6 +5,11 @@ import Swal from "sweetalert2";
 import api, { getApiErrorMessage } from "../utils/api";
 import { runWithSwalLoader } from "../utils/swalLoading";
 import { fetchGroupSummaries } from "../utils/groupDirectory";
+import {
+  promptLoginPasswordForDelete,
+  SECURITY_MODAL_OPTIONS,
+  withActionPasswordHeader,
+} from "../utils/security";
 
 function upsertBatchInList(existingBatches, incomingBatch) {
   if (!incomingBatch?._id) {
@@ -303,9 +308,15 @@ export default function Batches() {
       confirmButtonText: "Yes, Delete",
       cancelButtonText: "Cancel",
       confirmButtonColor: "#dc2626",
+      ...SECURITY_MODAL_OPTIONS,
     });
 
     if (!result.isConfirmed) {
+      return;
+    }
+
+    const loginPassword = await promptLoginPasswordForDelete();
+    if (!loginPassword) {
       return;
     }
 
@@ -315,7 +326,11 @@ export default function Batches() {
           title: "Deleting batch",
           text: "Removing this batch...",
         },
-        () => api.delete(`/batches/${batch._id}`),
+        () =>
+          api.delete(
+            `/batches/${batch._id}`,
+            withActionPasswordHeader(loginPassword),
+          ),
       );
 
       setBatches((prev) =>

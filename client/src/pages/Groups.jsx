@@ -8,6 +8,11 @@ import {
   fetchGroupSummaries,
   invalidateGroupDirectoryCache,
 } from "../utils/groupDirectory";
+import {
+  promptLoginPasswordForDelete,
+  SECURITY_MODAL_OPTIONS,
+  withActionPasswordHeader,
+} from "../utils/security";
 
 export default function Groups() {
   const [groups, setGroups] = useState([]);
@@ -170,9 +175,13 @@ export default function Groups() {
       confirmButtonText: "Yes, Delete",
       cancelButtonText: "Cancel",
       confirmButtonColor: "#dc2626",
+      ...SECURITY_MODAL_OPTIONS,
     });
 
     if (!result.isConfirmed) return;
+
+    const loginPassword = await promptLoginPasswordForDelete();
+    if (!loginPassword) return;
 
     try {
       await runWithSwalLoader(
@@ -180,7 +189,11 @@ export default function Groups() {
           title: "Deleting group",
           text: "Removing the group and its contacts...",
         },
-        () => api.delete(`/groups/${group._id}`),
+        () =>
+          api.delete(
+            `/groups/${group._id}`,
+            withActionPasswordHeader(loginPassword),
+          ),
       );
 
       invalidateGroupDirectoryCache();
