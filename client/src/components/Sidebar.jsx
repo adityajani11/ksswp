@@ -1,5 +1,14 @@
 import { NavLink, useNavigate } from "react-router-dom";
-import { Users, Send, LogOut, Menu, X, History, FileDown } from "lucide-react";
+import {
+  Users,
+  Send,
+  LogOut,
+  Menu,
+  X,
+  History,
+  FileDown,
+  Layers3,
+} from "lucide-react";
 import { useState } from "react";
 import Swal from "sweetalert2";
 import { getApiErrorMessage } from "../utils/api";
@@ -231,6 +240,14 @@ export default function Sidebar() {
           >
             <Users size={18} />
             <span className="font-medium">Groups</span>
+          </NavLink>
+          <NavLink
+            to="/dashboard/batches"
+            className={linkStyle}
+            onClick={() => setOpen(false)}
+          >
+            <Layers3 size={18} />
+            <span className="font-medium">Batches</span>
           </NavLink>
           <NavLink
             to="/dashboard/send"
