@@ -14,20 +14,24 @@ export default function SendVideoMessages() {
   const [showGroupModal, setShowGroupModal] = useState(false);
   const {
     groups,
+    batches,
     groupsLoading,
+    batchesLoading,
     searchLoading,
     selectionLoading,
     selectedGroups,
+    selectedBatches,
     selectedContacts,
     expandedGroups,
     search,
     setSearch,
-    ensureGroupSummariesLoaded,
+    ensureSelectionOptionsLoaded,
     buildRecipientPayload,
     discardSelection,
     isGroupLoading,
     toggleContact,
     toggleGroup,
+    toggleBatch,
     toggleGroupExpand,
     selectAll,
   } = useRecipientGroups();
@@ -114,7 +118,7 @@ export default function SendVideoMessages() {
     setSearch("");
     setShowGroupModal(true);
 
-    const nextGroups = await ensureGroupSummariesLoaded();
+    const nextGroups = await ensureSelectionOptionsLoaded();
     if (!nextGroups) {
       setShowGroupModal(false);
     }
@@ -346,6 +350,40 @@ export default function SendVideoMessages() {
               )}
             </div>
 
+            <div className="mt-3 border rounded p-3 space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Batches
+              </p>
+
+              {batchesLoading ? (
+                <p className="text-sm text-gray-500">Loading batches...</p>
+              ) : batches.length === 0 ? (
+                <p className="text-sm text-gray-500">No batches found.</p>
+              ) : (
+                <div className="space-y-2">
+                  {batches.map((batch) => (
+                    <label
+                      key={batch._id}
+                      className="flex items-start gap-2 text-sm cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedBatches.includes(batch._id)}
+                        onChange={() => toggleBatch(batch)}
+                        disabled={selectionLoading}
+                      />
+                      <span>
+                        {batch.name}
+                        <span className="text-xs text-gray-500 ml-1">
+                          ({batch.groupCount || batch.groupIds?.length || 0} groups, {batch.contactCount || 0} contacts)
+                        </span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <div className="flex justify-end gap-2 mt-4">
               <button
                 className="border px-4 py-2 rounded"
@@ -368,3 +406,4 @@ export default function SendVideoMessages() {
     </div>
   );
 }
+
