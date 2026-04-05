@@ -273,25 +273,52 @@ export default function useRecipientGroups() {
   };
 
   const selectAll = async () => {
-    const availableGroups = await ensureGroupSummariesLoaded();
-    if (!availableGroups) {
-      return;
-    }
-
-    const allGroupIds = availableGroups.map((group) => group._id);
-
     setSelectionLoading(true);
 
     try {
-      const nextGroups = await ensureGroupDetailsLoaded(allGroupIds);
+      const query = String(search || "").trim();
+      let groupsToSelect = [];
+
+      if (query) {
+        const summaries = await fetchGroupSummaries({ search: query });
+        groupsToSelect = overlayGroupsById(
+          Array.isArray(summaries) ? summaries : [],
+          groupsRef.current.filter((group) => group.contactsLoaded),
+        );
+        setSearchResults(groupsToSelect);
+      } else {
+        const availableGroups = await ensureGroupSummariesLoaded();
+        if (!availableGroups) {
+          return;
+        }
+
+        groupsToSelect = availableGroups;
+      }
+
+      const targetGroupIds = uniqueItems(
+        groupsToSelect.map((group) => String(group._id)),
+      );
+
+      if (!targetGroupIds.length) {
+        resetSelection();
+        return;
+      }
+
+      const nextGroups = await ensureGroupDetailsLoaded(targetGroupIds);
       if (!nextGroups) {
         return;
       }
 
-      syncSelectedGroups(allGroupIds);
+      syncSelectedGroups(targetGroupIds);
       syncManuallyDeselected([]);
-      setExpandedGroups(allGroupIds);
-      recalculateSelectedContacts(allGroupIds, []);
+      setExpandedGroups(targetGroupIds);
+      recalculateSelectedContacts(targetGroupIds, []);
+    } catch (err) {
+      Swal.fire(
+        "Error",
+        getApiErrorMessage(err, "Failed to select contacts"),
+        "error",
+      );
     } finally {
       setSelectionLoading(false);
     }
@@ -378,3 +405,4 @@ export default function useRecipientGroups() {
     selectAll,
   };
 }
+
