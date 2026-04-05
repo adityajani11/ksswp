@@ -187,11 +187,6 @@ export default function Batches() {
       return;
     }
 
-    if (!selectedGroupIds.length) {
-      Swal.fire("Required", "Select at least one group", "warning");
-      return;
-    }
-
     try {
       const res = await runWithSwalLoader(
         isEditMode
@@ -405,7 +400,7 @@ export default function Batches() {
           <div className="space-y-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <label className="text-sm font-medium text-gray-700">
-                Select Groups ({selectedGroupIds.length} selected)
+                Select Groups (optional) ({selectedGroupIds.length} selected)
               </label>
               <button
                 type="button"

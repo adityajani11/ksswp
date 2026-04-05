@@ -24,8 +24,8 @@ const batchSchema = new mongoose.Schema(
 );
 
 batchSchema.path("groupIds").validate(
-  (groupIds) => Array.isArray(groupIds) && groupIds.length > 0,
-  "At least one group is required",
+  (groupIds) => Array.isArray(groupIds),
+  "Invalid group list",
 );
 
 batchSchema.index({ createdAt: -1 });

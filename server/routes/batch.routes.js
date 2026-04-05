@@ -2,6 +2,8 @@ const express = require("express");
 const mongoose = require("mongoose");
 const Batch = require("../models/Batch");
 const Group = require("../models/Group");
+const auth = require("../middleware/auth");
+const requireActionPassword = require("../middleware/requireActionPassword");
 
 const router = express.Router();
 
@@ -118,16 +120,18 @@ router.post("/", async (req, res) => {
       return res.status(400).json({ message: "Batch name too long" });
     }
 
-    if (groupIds === null || !groupIds.length) {
-      return res.status(400).json({ message: "Select at least one group" });
+    if (groupIds === null) {
+      return res.status(400).json({ message: "Invalid group ids" });
     }
 
-    const existingGroupsCount = await Group.countDocuments({
-      _id: { $in: groupIds },
-    });
+    if (groupIds.length) {
+      const existingGroupsCount = await Group.countDocuments({
+        _id: { $in: groupIds },
+      });
 
-    if (existingGroupsCount !== groupIds.length) {
-      return res.status(404).json({ message: "One or more groups were not found" });
+      if (existingGroupsCount !== groupIds.length) {
+        return res.status(404).json({ message: "One or more groups were not found" });
+      }
     }
 
     const createdBatch = await Batch.create({
@@ -196,16 +200,18 @@ router.put("/:id", async (req, res) => {
     if (hasGroupIds) {
       const groupIds = normalizeGroupIds(body.groupIds);
 
-      if (groupIds === null || !groupIds.length) {
-        return res.status(400).json({ message: "Select at least one group" });
+      if (groupIds === null) {
+        return res.status(400).json({ message: "Invalid group ids" });
       }
 
-      const existingGroupsCount = await Group.countDocuments({
-        _id: { $in: groupIds },
-      });
+      if (groupIds.length) {
+        const existingGroupsCount = await Group.countDocuments({
+          _id: { $in: groupIds },
+        });
 
-      if (existingGroupsCount !== groupIds.length) {
-        return res.status(404).json({ message: "One or more groups were not found" });
+        if (existingGroupsCount !== groupIds.length) {
+          return res.status(404).json({ message: "One or more groups were not found" });
+        }
       }
 
       updatePayload.groupIds = groupIds;
@@ -232,7 +238,7 @@ router.put("/:id", async (req, res) => {
 /**
  * Delete Batch
  */
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", auth, requireActionPassword, async (req, res) => {
   try {
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
       return res.status(400).json({ message: "Invalid batch id" });

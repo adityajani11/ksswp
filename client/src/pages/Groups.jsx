@@ -1,18 +1,23 @@
-import { useDeferredValue, useEffect, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import Swal from "sweetalert2";
-import api from "../utils/api";
+import api, { getApiErrorMessage } from "../utils/api";
 import { runWithSwalLoader } from "../utils/swalLoading";
 import { useNavigate } from "react-router-dom";
 import {
   fetchGroupsByIds,
   fetchGroupSummaries,
   invalidateGroupDirectoryCache,
+  upsertCachedGroup,
 } from "../utils/groupDirectory";
 import {
   promptLoginPasswordForDelete,
   SECURITY_MODAL_OPTIONS,
   withActionPasswordHeader,
 } from "../utils/security";
+
+function getSearchedContactSelectionId(contact) {
+  return `${String(contact?.groupId || "")}::${String(contact?.phone || "")}`;
+}
 
 export default function Groups() {
   const [groups, setGroups] = useState([]);
@@ -22,7 +27,13 @@ export default function Groups() {
   const [groupSearch, setGroupSearch] = useState("");
   const [contactSearch, setContactSearch] = useState("");
   const [matchingContacts, setMatchingContacts] = useState([]);
+  const [selectedContactIds, setSelectedContactIds] = useState([]);
   const [searchingContacts, setSearchingContacts] = useState(false);
+  const [showMoveModal, setShowMoveModal] = useState(false);
+  const [moveGroups, setMoveGroups] = useState([]);
+  const [moveGroupsLoading, setMoveGroupsLoading] = useState(false);
+  const [targetGroupSearch, setTargetGroupSearch] = useState("");
+  const [selectedTargetGroupId, setSelectedTargetGroupId] = useState("");
   const navigate = useNavigate();
   const deferredGroupSearch = useDeferredValue(groupSearch);
   const deferredContactSearch = useDeferredValue(contactSearch);
@@ -50,6 +61,7 @@ export default function Groups() {
 
     if (!rawQuery) {
       setMatchingContacts([]);
+      setSelectedContactIds([]);
       setSearchingContacts(false);
       return undefined;
     }
@@ -122,9 +134,252 @@ export default function Groups() {
     };
   }, [deferredContactSearch, groups]);
 
+  useEffect(() => {
+    const availableIds = new Set(
+      matchingContacts.map((contact) => getSearchedContactSelectionId(contact)),
+    );
+
+    setSelectedContactIds((prev) => {
+      const next = prev.filter((id) => availableIds.has(id));
+      return next.length === prev.length ? prev : next;
+    });
+  }, [matchingContacts]);
+
   const filteredGroups = groups.filter((group) =>
     group.name.toLowerCase().includes(deferredGroupSearch.toLowerCase()),
   );
+  const selectedContactSet = useMemo(
+    () => new Set(selectedContactIds),
+    [selectedContactIds],
+  );
+  const selectedContacts = useMemo(
+    () =>
+      matchingContacts.filter((contact) =>
+        selectedContactSet.has(getSearchedContactSelectionId(contact)),
+      ),
+    [matchingContacts, selectedContactSet],
+  );
+
+  const filteredMoveGroups = useMemo(() => {
+    const normalizedSearch = String(targetGroupSearch || "")
+      .trim()
+      .toLowerCase();
+
+    if (!normalizedSearch) {
+      return moveGroups;
+    }
+
+    return moveGroups.filter((candidateGroup) =>
+      String(candidateGroup.name || "")
+        .toLowerCase()
+        .includes(normalizedSearch),
+    );
+  }, [moveGroups, targetGroupSearch]);
+
+  const selectedTargetGroup = useMemo(
+    () =>
+      moveGroups.find(
+        (candidateGroup) =>
+          String(candidateGroup._id) === String(selectedTargetGroupId),
+      ) || null,
+    [moveGroups, selectedTargetGroupId],
+  );
+
+  const closeMoveModal = () => {
+    setShowMoveModal(false);
+    setMoveGroups([]);
+    setMoveGroupsLoading(false);
+    setTargetGroupSearch("");
+    setSelectedTargetGroupId("");
+  };
+
+  const updateGroupSummaryFromMove = (nextGroup) => {
+    if (!nextGroup?._id) {
+      return;
+    }
+
+    const normalizedId = String(nextGroup._id);
+    const nextContactCount = Array.isArray(nextGroup.contacts)
+      ? nextGroup.contacts.length
+      : Number(nextGroup.contactCount ?? 0);
+
+    setGroups((prev) =>
+      prev.map((group) =>
+        String(group._id) === normalizedId
+          ? {
+              ...group,
+              name: String(nextGroup.name || group.name || ""),
+              contactCount: nextContactCount,
+            }
+          : group,
+      ),
+    );
+  };
+
+  const toggleSearchedContactSelection = (contact) => {
+    const selectionId = getSearchedContactSelectionId(contact);
+
+    setSelectedContactIds((prev) =>
+      prev.includes(selectionId)
+        ? prev.filter((id) => id !== selectionId)
+        : [...prev, selectionId],
+    );
+  };
+
+  const openMoveModalForSelected = async () => {
+    if (!selectedContacts.length) {
+      Swal.fire(
+        "No selection",
+        "Select at least one contact number to move",
+        "warning",
+      );
+      return;
+    }
+
+    setShowMoveModal(true);
+    setMoveGroups([]);
+    setMoveGroupsLoading(true);
+    setTargetGroupSearch("");
+    setSelectedTargetGroupId("");
+
+    try {
+      const selectedSourceGroupIds = new Set(
+        selectedContacts.map((contact) => String(contact.groupId)),
+      );
+      const summaries = await fetchGroupSummaries();
+      const availableGroups = (
+        Array.isArray(summaries) ? summaries : []
+      ).filter(
+        (candidateGroup) =>
+          !selectedSourceGroupIds.has(String(candidateGroup._id)),
+      );
+
+      if (!availableGroups.length) {
+        closeMoveModal();
+        Swal.fire(
+          "No target group",
+          "No eligible target group found for selected contacts.",
+          "info",
+        );
+        return;
+      }
+
+      setMoveGroups(availableGroups);
+    } catch (err) {
+      closeMoveModal();
+      Swal.fire(
+        "Error",
+        getApiErrorMessage(err, "Failed to load groups"),
+        "error",
+      );
+    } finally {
+      setMoveGroupsLoading(false);
+    }
+  };
+
+  const moveSelectedSearchedContacts = async () => {
+    if (!selectedContacts.length) {
+      Swal.fire("No selection", "Select contact numbers to move", "warning");
+      return;
+    }
+
+    if (!selectedTargetGroupId) {
+      Swal.fire("Required", "Please choose a target group", "warning");
+      return;
+    }
+
+    const contactsBySourceGroup = selectedContacts.reduce((acc, contact) => {
+      const sourceGroupId = String(contact.groupId);
+
+      if (!acc[sourceGroupId]) {
+        acc[sourceGroupId] = [];
+      }
+
+      acc[sourceGroupId].push(contact);
+      return acc;
+    }, {});
+
+    const targetGroupName = String(selectedTargetGroup?.name || "selected group");
+    const result = await Swal.fire({
+      title: "Move selected contact numbers?",
+      html: `
+        <p>
+          Move <strong>${selectedContacts.length} contact(s)</strong> to
+          <strong> ${targetGroupName}</strong>?
+        </p>
+      `,
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonText: "Yes, Move",
+      cancelButtonText: "Cancel",
+      confirmButtonColor: "#2563eb",
+    });
+
+    if (!result.isConfirmed) {
+      return;
+    }
+
+    try {
+      let movedCount = 0;
+      const movedPhoneSet = new Set(
+        selectedContacts.map((contact) => String(contact.phone)),
+      );
+
+      await runWithSwalLoader(
+        {
+          title: "Moving contacts",
+          text: `Moving selected contacts to "${targetGroupName}"...`,
+        },
+        async () => {
+          for (const [sourceGroupId, contacts] of Object.entries(
+            contactsBySourceGroup,
+          )) {
+            const phones = contacts.map((contact) => String(contact.phone));
+            const res = await api.post(`/groups/${sourceGroupId}/contacts/move`, {
+              targetGroupId: selectedTargetGroupId,
+              phones,
+            });
+
+            movedCount += Number(res.data?.movedCount ?? phones.length);
+            const nextSourceGroup =
+              upsertCachedGroup(res.data?.sourceGroup) || res.data?.sourceGroup;
+            const nextTargetGroup =
+              upsertCachedGroup(res.data?.targetGroup) || res.data?.targetGroup;
+
+            updateGroupSummaryFromMove(nextSourceGroup);
+            updateGroupSummaryFromMove(nextTargetGroup);
+          }
+        },
+      );
+
+      setMatchingContacts((prev) =>
+        prev.map((contact) =>
+          movedPhoneSet.has(String(contact.phone))
+            ? {
+                ...contact,
+                key: `${selectedTargetGroupId}-${contact.phone}-${contact.name || ""}`,
+                groupId: selectedTargetGroupId,
+                groupName: targetGroupName,
+              }
+            : contact,
+        ),
+      );
+
+      setSelectedContactIds([]);
+      closeMoveModal();
+      Swal.fire(
+        "Moved",
+        `${movedCount || selectedContacts.length} contact(s) moved to "${targetGroupName}".`,
+        "success",
+      );
+    } catch (err) {
+      Swal.fire(
+        "Error",
+        getApiErrorMessage(err, "Failed to move selected contacts"),
+        "error",
+      );
+    }
+  };
 
   const createGroup = async () => {
     if (!name.trim()) {
@@ -250,9 +505,26 @@ export default function Groups() {
 
       {String(contactSearch || "").trim() && (
         <div className="space-y-2">
-          <h3 className="text-sm font-semibold text-gray-700">
-            Contact Search Results
-          </h3>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-sm font-semibold text-gray-700">
+              Contact Search Results
+            </h3>
+
+            {selectedContacts.length > 0 && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-600">
+                  {selectedContacts.length} selected
+                </span>
+                <button
+                  type="button"
+                  onClick={openMoveModalForSelected}
+                  className="bg-blue-600 text-white px-3 py-1.5 rounded text-xs font-semibold"
+                >
+                  MOVE
+                </button>
+              </div>
+            )}
+          </div>
 
           <div className="bg-white rounded shadow border overflow-hidden">
             {searchingContacts ? (
@@ -263,20 +535,33 @@ export default function Groups() {
               </p>
             ) : (
               matchingContacts.map((contact) => (
-                <button
+                <div
                   key={contact.key}
-                  type="button"
-                  onClick={() => navigate(`/dashboard/groups/${contact.groupId}`)}
-                  className="w-full p-3 text-left border-b last:border-b-0 hover:bg-gray-50"
+                  className="flex items-center gap-3 p-3 border-b last:border-b-0 hover:bg-gray-50"
                 >
-                  <div className="font-medium text-sm">{contact.name}</div>
-                  <div className="text-sm text-gray-600 flex flex-wrap items-center gap-2 mt-0.5">
-                    <span>+{contact.phone}</span>
-                    <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
-                      {contact.groupName}
-                    </span>
-                  </div>
-                </button>
+                  <input
+                    type="checkbox"
+                    checked={selectedContactSet.has(
+                      getSearchedContactSelectionId(contact),
+                    )}
+                    onChange={() => toggleSearchedContactSelection(contact)}
+                    className="h-4 w-4 shrink-0"
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/dashboard/groups/${contact.groupId}`)}
+                    className="flex-1 text-left min-w-0"
+                  >
+                    <div className="font-medium text-sm truncate">{contact.name}</div>
+                    <div className="text-sm text-gray-600 flex flex-wrap items-center gap-2 mt-0.5">
+                      <span>+{contact.phone}</span>
+                      <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
+                        {contact.groupName}
+                      </span>
+                    </div>
+                  </button>
+                </div>
               ))
             )}
           </div>
@@ -345,6 +630,87 @@ export default function Groups() {
               </p>
             </div>
           ))}
+        </div>
+      )}
+
+      {showMoveModal && selectedContacts.length > 0 && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
+          <div className="bg-white rounded-xl shadow-lg w-full max-w-xl p-4 space-y-3">
+            <h3 className="text-lg font-semibold">Move Selected Contacts</h3>
+
+            <div className="rounded border bg-gray-50 px-3 py-2 text-sm text-gray-700">
+              <p className="font-medium">
+                {selectedContacts.length} contact
+                {selectedContacts.length === 1 ? "" : "s"} selected
+              </p>
+              <p className="text-xs text-gray-500 mt-1">
+                Choose a target group for selected contact numbers.
+              </p>
+            </div>
+
+            <input
+              type="text"
+              value={targetGroupSearch}
+              onChange={(e) => setTargetGroupSearch(e.target.value)}
+              placeholder="Search target group..."
+              className="w-full border p-2 rounded"
+            />
+
+            <div className="border rounded max-h-72 overflow-y-auto">
+              {moveGroupsLoading ? (
+                <p className="p-3 text-sm text-gray-500">Loading groups...</p>
+              ) : filteredMoveGroups.length === 0 ? (
+                <p className="p-3 text-sm text-gray-500">
+                  No groups match your search.
+                </p>
+              ) : (
+                filteredMoveGroups.map((targetGroup) => (
+                  <label
+                    key={targetGroup._id}
+                    className="flex items-center justify-between gap-2 p-3 border-b last:border-b-0 hover:bg-gray-50 cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <input
+                        type="radio"
+                        name="targetGroup"
+                        checked={
+                          String(selectedTargetGroupId) ===
+                          String(targetGroup._id)
+                        }
+                        onChange={() =>
+                          setSelectedTargetGroupId(String(targetGroup._id))
+                        }
+                      />
+                      <span className="font-medium truncate">
+                        {targetGroup.name}
+                      </span>
+                    </div>
+                    <span className="text-xs text-gray-500 shrink-0">
+                      {targetGroup.contactCount || 0} contacts
+                    </span>
+                  </label>
+                ))
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2 pt-1">
+              <button
+                type="button"
+                onClick={closeMoveModal}
+                className="border px-4 py-2 rounded"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!selectedTargetGroupId || moveGroupsLoading}
+                onClick={moveSelectedSearchedContacts}
+                className="bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-50"
+              >
+                MOVE
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

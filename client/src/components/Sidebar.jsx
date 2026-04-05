@@ -298,7 +298,7 @@ export default function Sidebar() {
       <aside
         className={`
           fixed top-0 left-0 z-50
-          w-64 h-screen overflow-y-auto overscroll-contain bg-white border-r flex flex-col
+          w-64 h-[100dvh] md:h-screen overflow-hidden bg-white border-r flex flex-col
           transform transition-transform duration-300
           ${open ? "translate-x-0" : "-translate-x-full"}
           md:translate-x-0
@@ -315,7 +315,7 @@ export default function Sidebar() {
         </div>
 
         {/* Menu */}
-        <nav className="p-3 space-y-2 flex-1">
+        <nav className="p-3 space-y-2 flex-1 min-h-0 overflow-y-auto overscroll-contain">
           <NavLink
             to="/dashboard/groups"
             className={linkStyle}
@@ -391,7 +391,7 @@ export default function Sidebar() {
         </nav>
 
         {/* Logout */}
-        <div className="p-3 border-t">
+        <div className="p-3 border-t bg-white shrink-0 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
           <button
             onClick={handleLogout}
             className="w-full flex items-center gap-3 p-2.5 rounded-lg text-red-600 hover:bg-red-50 transition"
