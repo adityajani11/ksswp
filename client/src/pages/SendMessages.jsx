@@ -16,7 +16,6 @@ export default function SendGroupMessages() {
     batches,
     groupsLoading,
     batchesLoading,
-    searchLoading,
     selectionLoading,
     selectedGroups,
     selectedBatches,
@@ -214,7 +213,7 @@ export default function SendGroupMessages() {
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search group or contact..."
+                placeholder="Search group name..."
                 className="w-full outline-none"
               />
             </div>
@@ -237,9 +236,9 @@ export default function SendGroupMessages() {
             </div>
 
             <div className="max-h-72 overflow-y-auto border rounded p-3 space-y-3">
-              {groupsLoading || searchLoading ? (
+              {groupsLoading ? (
                 <p className="text-sm text-gray-500">
-                  {searchLoading ? "Searching groups..." : "Loading groups..."}
+                  Loading groups...
                 </p>
               ) : groups.length === 0 ? (
                 <p className="text-sm text-gray-500">No groups found.</p>
@@ -372,3 +371,4 @@ export default function SendGroupMessages() {
     </div>
   );
 }
+

@@ -19,6 +19,44 @@ function getSearchedContactSelectionId(contact) {
   return `${String(contact?.groupId || "")}::${String(contact?.phone || "")}`;
 }
 
+function toDisplayPhone(phone) {
+  const normalizedPhone = String(phone || "").replace(/^\+/, "").trim();
+  return normalizedPhone ? `+${normalizedPhone}` : "";
+}
+
+function getContactDisplayLabel(contact) {
+  const contactName = String(contact?.name || "").trim();
+  const contactPhoneLabel = toDisplayPhone(contact?.phone);
+
+  if (contactName && contactPhoneLabel) {
+    return `${contactName} (${contactPhoneLabel})`;
+  }
+
+  if (contactName) {
+    return contactName;
+  }
+
+  if (contactPhoneLabel) {
+    return contactPhoneLabel;
+  }
+
+  return "Unnamed contact";
+}
+
+function summarizeLabels(labels, maxItems = 3) {
+  const normalizedLabels = (Array.isArray(labels) ? labels : [])
+    .map((label) => String(label || "").trim())
+    .filter(Boolean);
+
+  if (!normalizedLabels.length) {
+    return "";
+  }
+
+  const preview = normalizedLabels.slice(0, maxItems).join(", ");
+  const remaining = normalizedLabels.length - maxItems;
+  return remaining > 0 ? `${preview}, +${remaining} more` : preview;
+}
+
 export default function Groups() {
   const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -159,6 +197,24 @@ export default function Groups() {
       ),
     [matchingContacts, selectedContactSet],
   );
+  const selectedContactSummary = useMemo(
+    () => summarizeLabels(selectedContacts.map(getContactDisplayLabel)),
+    [selectedContacts],
+  );
+  const selectedSourceGroupSummary = useMemo(
+    () =>
+      summarizeLabels(
+        [
+          ...new Set(
+            selectedContacts.map((contact) =>
+              String(contact.groupName || "Unknown group"),
+            ),
+          ),
+        ],
+        2,
+      ) || "selected groups",
+    [selectedContacts],
+  );
 
   const filteredMoveGroups = useMemo(() => {
     const normalizedSearch = String(targetGroupSearch || "")
@@ -258,7 +314,7 @@ export default function Groups() {
         closeMoveModal();
         Swal.fire(
           "No target group",
-          "No eligible target group found for selected contacts.",
+          `No eligible target group found for contacts from ${selectedSourceGroupSummary}.`,
           "info",
         );
         return;
@@ -284,7 +340,11 @@ export default function Groups() {
     }
 
     if (!selectedTargetGroupId) {
-      Swal.fire("Required", "Please choose a target group", "warning");
+      Swal.fire(
+        "Required",
+        `Please choose a target group for contacts from ${selectedSourceGroupSummary}.`,
+        "warning",
+      );
       return;
     }
 
@@ -301,13 +361,10 @@ export default function Groups() {
 
     const targetGroupName = String(selectedTargetGroup?.name || "selected group");
     const result = await Swal.fire({
-      title: "Move selected contact numbers?",
-      html: `
-        <p>
-          Move <strong>${selectedContacts.length} contact(s)</strong> to
-          <strong> ${targetGroupName}</strong>?
-        </p>
-      `,
+      title: `Move ${selectedContacts.length} contact(s)?`,
+      text: selectedContactSummary
+        ? `${selectedContactSummary} from ${selectedSourceGroupSummary} will be moved to "${targetGroupName}".`
+        : `Selected contacts from ${selectedSourceGroupSummary} will be moved to "${targetGroupName}".`,
       icon: "question",
       showCancelButton: true,
       confirmButtonText: "Yes, Move",
@@ -328,7 +385,7 @@ export default function Groups() {
       await runWithSwalLoader(
         {
           title: "Moving contacts",
-          text: `Moving selected contacts to "${targetGroupName}"...`,
+          text: `Moving ${selectedContacts.length} contact(s) from ${selectedSourceGroupSummary} to "${targetGroupName}"...`,
         },
         async () => {
           for (const [sourceGroupId, contacts] of Object.entries(
@@ -369,7 +426,7 @@ export default function Groups() {
       closeMoveModal();
       Swal.fire(
         "Moved",
-        `${movedCount || selectedContacts.length} contact(s) moved to "${targetGroupName}".`,
+        `${movedCount || selectedContacts.length} contact(s) moved from ${selectedSourceGroupSummary} to "${targetGroupName}".`,
         "success",
       );
     } catch (err) {
@@ -382,7 +439,9 @@ export default function Groups() {
   };
 
   const createGroup = async () => {
-    if (!name.trim()) {
+    const groupNameToCreate = String(name || "").trim();
+
+    if (!groupNameToCreate) {
       Swal.fire("Required", "Group name is required", "warning");
       return;
     }
@@ -390,10 +449,10 @@ export default function Groups() {
     try {
       await runWithSwalLoader(
         {
-          title: "Creating group",
-          text: "Saving the new group...",
+          title: `Creating "${groupNameToCreate}"`,
+          text: `Saving group "${groupNameToCreate}"...`,
         },
-        () => api.post("/groups", { name: name.trim() }),
+        () => api.post("/groups", { name: groupNameToCreate }),
       );
 
       invalidateGroupDirectoryCache();
@@ -401,11 +460,16 @@ export default function Groups() {
       setShowForm(false);
       await fetchGroups({ force: true });
 
-      Swal.fire("Created", "Group created successfully", "success");
+      Swal.fire(
+        "Created",
+        `Group "${groupNameToCreate}" created successfully.`,
+        "success",
+      );
     } catch (err) {
       Swal.fire(
         "Error",
-        err.response?.data?.message || "Failed to create group",
+        err.response?.data?.message ||
+          `Failed to create group "${groupNameToCreate}"`,
         "error",
       );
     }
@@ -413,18 +477,11 @@ export default function Groups() {
 
   const deleteGroup = async (group) => {
     const count = group.contactCount || 0;
+    const groupName = String(group?.name || "Unnamed group");
 
     const result = await Swal.fire({
-      title: "Delete group?",
-      html: `
-        <p class="text-gray-600">
-          This will permanently delete
-          <strong> ${count} contact${count !== 1 ? "s" : ""}</strong>.
-        </p>
-        <p class="mt-2 text-red-600 font-semibold">
-          This action cannot be undone.
-        </p>
-      `,
+      title: `Delete group "${groupName}"?`,
+      text: `This will permanently delete ${count} contact${count === 1 ? "" : "s"} in "${groupName}". This action cannot be undone.`,
       icon: "warning",
       showCancelButton: true,
       confirmButtonText: "Yes, Delete",
@@ -435,14 +492,16 @@ export default function Groups() {
 
     if (!result.isConfirmed) return;
 
-    const loginPassword = await promptLoginPasswordForDelete();
+    const loginPassword = await promptLoginPasswordForDelete({
+      text: `Delete password is required to delete group "${groupName}".`,
+    });
     if (!loginPassword) return;
 
     try {
       await runWithSwalLoader(
         {
           title: "Deleting group",
-          text: "Removing the group and its contacts...",
+          text: `Removing "${groupName}" and its contacts...`,
         },
         () =>
           api.delete(
@@ -453,11 +512,15 @@ export default function Groups() {
 
       invalidateGroupDirectoryCache();
       await fetchGroups({ force: true });
-      Swal.fire("Deleted", "Group deleted successfully", "success");
+      Swal.fire(
+        "Deleted",
+        `Group "${groupName}" deleted successfully.`,
+        "success",
+      );
     } catch (err) {
       Swal.fire(
         "Error",
-        err.response?.data?.message || "Failed to delete group",
+        err.response?.data?.message || `Failed to delete group "${groupName}"`,
         "error",
       );
     }

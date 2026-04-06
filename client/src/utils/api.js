@@ -1,9 +1,11 @@
 import axios from "axios";
 
+// Uncomment this for production
 const api = axios.create({
   baseURL: "/api",
 });
 
+// Uncomment this for local development
 // const api = axios.create({
 //   baseURL: import.meta.env.VITE_API_URL || "http://localhost:5000/api",
 // });
