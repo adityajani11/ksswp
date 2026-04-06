@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useRef, useState } from "react";
+import { useDeferredValue, useRef, useState } from "react";
 import Swal from "sweetalert2";
 import api, { getApiErrorMessage } from "../utils/api";
 import { fetchGroupSummaries, fetchGroupsByIds } from "../utils/groupDirectory";
@@ -36,27 +36,6 @@ function mergeGroupsById(baseGroups, incomingGroups) {
   return merged;
 }
 
-function overlayGroupsById(baseGroups, incomingGroups) {
-  const incomingById = new Map(
-    incomingGroups.map((group) => [String(group._id), group]),
-  );
-
-  return baseGroups.map((group) => {
-    const incoming = incomingById.get(String(group._id));
-    if (!incoming) {
-      return group;
-    }
-
-    return {
-      ...group,
-      ...incoming,
-      contacts: incoming.contactsLoaded ? incoming.contacts : group.contacts,
-      contactsLoaded: Boolean(incoming.contactsLoaded || group.contactsLoaded),
-      contactCount:
-        incoming.contactCount ?? group.contactCount ?? incoming.contacts?.length ?? 0,
-    };
-  });
-}
 
 function uniqueItems(items) {
   return [...new Set(items)];
@@ -64,6 +43,17 @@ function uniqueItems(items) {
 
 function removeItem(items, value) {
   return items.filter((item) => item !== value);
+}
+
+function filterGroupsByName(groups, search) {
+  const query = String(search || "").trim().toLowerCase();
+  if (!query) {
+    return groups;
+  }
+
+  return groups.filter((group) =>
+    String(group.name || "").toLowerCase().includes(query),
+  );
 }
 
 function buildSelectedContacts(groups, selectedGroupIds, manuallyDeselected) {
@@ -123,11 +113,9 @@ function normalizeBatch(batch) {
 
 export default function useRecipientGroups() {
   const [groups, setGroups] = useState([]);
-  const [searchResults, setSearchResults] = useState([]);
   const [batches, setBatches] = useState([]);
   const [groupsLoading, setGroupsLoading] = useState(false);
   const [batchesLoading, setBatchesLoading] = useState(false);
-  const [searchLoading, setSearchLoading] = useState(false);
   const [loadingGroupIds, setLoadingGroupIds] = useState([]);
   const [selectionLoading, setSelectionLoading] = useState(false);
   const [selectedGroups, setSelectedGroups] = useState([]);
@@ -188,6 +176,7 @@ export default function useRecipientGroups() {
     setManuallyDeselected(nextManuallyDeselected);
     return nextManuallyDeselected;
   };
+
 
   const mergeAndStoreGroups = (incomingGroups, { useIncomingOrder = false } = {}) => {
     const nextGroups = useIncomingOrder
@@ -432,27 +421,25 @@ export default function useRecipientGroups() {
     syncManuallyDeselected(nextManuallyDeselected);
   };
 
+
   const selectAll = async () => {
     setSelectionLoading(true);
 
     try {
       const query = String(search || "").trim();
-      let groupsToSelect = [];
+      let groupsToSelect = groupsRef.current;
 
-      if (query) {
-        const summaries = await fetchGroupSummaries({ search: query });
-        groupsToSelect = overlayGroupsById(
-          Array.isArray(summaries) ? summaries : [],
-          groupsRef.current.filter((group) => group.contactsLoaded),
-        );
-        setSearchResults(groupsToSelect);
-      } else {
+      if (!groupsToSelect.length) {
         const availableGroups = await ensureGroupSummariesLoaded();
         if (!availableGroups) {
           return;
         }
 
         groupsToSelect = availableGroups;
+      }
+
+      if (query) {
+        groupsToSelect = filterGroupsByName(groupsToSelect, query);
       }
 
       const targetGroupIds = uniqueItems(
@@ -500,56 +487,8 @@ export default function useRecipientGroups() {
     return buildRecipientsPayload(groupsRef.current, selectedContactsRef.current);
   };
 
-  useEffect(() => {
-    const query = String(deferredSearch || "").trim();
-
-    if (!query) {
-      setSearchResults([]);
-      setSearchLoading(false);
-      return undefined;
-    }
-
-    let cancelled = false;
-
-    const runSearch = async () => {
-      setSearchLoading(true);
-
-      try {
-        const summaries = await fetchGroupSummaries({ search: query });
-        if (cancelled) {
-          return;
-        }
-
-        setSearchResults(
-          overlayGroupsById(
-            summaries,
-            groupsRef.current.filter((group) => group.contactsLoaded),
-          ),
-        );
-      } catch (err) {
-        if (!cancelled) {
-          Swal.fire(
-            "Error",
-            getApiErrorMessage(err, "Failed to search groups"),
-            "error",
-          );
-        }
-      } finally {
-        if (!cancelled) {
-          setSearchLoading(false);
-        }
-      }
-    };
-
-    runSearch();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [deferredSearch]);
-
   const trimmedDeferredSearch = String(deferredSearch || "").trim();
-  const visibleGroups = trimmedDeferredSearch ? searchResults : groups;
+  const visibleGroups = filterGroupsByName(groups, trimmedDeferredSearch);
   const visibleBatches = trimmedDeferredSearch
     ? batches.filter((batch) =>
         String(batch.name || "")
@@ -563,7 +502,6 @@ export default function useRecipientGroups() {
     batches: visibleBatches,
     groupsLoading,
     batchesLoading,
-    searchLoading,
     selectionLoading,
     selectedGroups,
     selectedBatches,

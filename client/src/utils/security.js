@@ -47,12 +47,26 @@ export async function promptDeveloperPassword() {
   return String(result.value || "");
 }
 
-export async function promptLoginPasswordForDelete() {
+export async function promptLoginPasswordForDelete(options = {}) {
+  const title =
+    typeof options.title === "string" && options.title.trim()
+      ? options.title
+      : "Enter delete password";
+  const text =
+    typeof options.text === "string" && options.text.trim()
+      ? options.text
+      : "Delete password is required to continue.";
+  const confirmButtonText =
+    typeof options.confirmButtonText === "string" &&
+    options.confirmButtonText.trim()
+      ? options.confirmButtonText
+      : "Continue";
+
   const result = await Swal.fire({
-    title: "Enter login password",
-    text: "Login password is required to delete.",
+    title,
+    text,
     input: "password",
-    inputPlaceholder: "Login password",
+    inputPlaceholder: "Delete password",
     inputAttributes: {
       autocapitalize: "off",
       autocorrect: "off",
@@ -60,11 +74,11 @@ export async function promptLoginPasswordForDelete() {
       autocomplete: "current-password",
     },
     showCancelButton: true,
-    confirmButtonText: "Continue",
+    confirmButtonText,
     cancelButtonText: "Cancel",
     inputValidator: (value) => {
       if (!String(value || "").trim()) {
-        return "Login password is required";
+        return "Delete password is required";
       }
 
       return undefined;

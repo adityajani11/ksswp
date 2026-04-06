@@ -3,6 +3,7 @@ const express = require("express");
 const cors = require("cors");
 const connectDB = require("./db");
 const { startQueueWorker } = require("./services/messageQueue.service");
+const { migrateLegacyPasswordSplit } = require("./utils/passwordMigration");
 
 const authRoutes = require("./routes/auth.routes");
 const whatsappRoutes = require("./routes/whatsapp.routes");
@@ -49,6 +50,12 @@ app.use((err, req, res, next) => {
 async function bootstrap() {
   try {
     await connectDB();
+    const migrationResult = await migrateLegacyPasswordSplit();
+    if (migrationResult.migrated > 0) {
+      console.log(
+        `[startup] Password migration complete: ${migrationResult.migrated}/${migrationResult.inspected} user(s) updated.`,
+      );
+    }
     startQueueWorker();
 
     app.listen(process.env.PORT, () =>

@@ -9,7 +9,7 @@ module.exports = async (req, res, next) => {
 
     if (!actionPassword) {
       return res.status(400).json({
-        message: "Login password is required for delete action",
+        message: "Delete password is required for delete action",
       });
     }
 
@@ -18,22 +18,23 @@ module.exports = async (req, res, next) => {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    const user = await User.findById(userId).select("password");
+    const user = await User.findById(userId).select("password deletePassword");
     if (!user) {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    const passwordOk = await bcrypt.compare(actionPassword, user.password);
+    const deletePasswordHash = String(user.deletePassword || user.password || "");
+    const passwordOk = await bcrypt.compare(actionPassword, deletePasswordHash);
     if (!passwordOk) {
       return res.status(403).json({
-        message: "Invalid login password",
+        message: "Invalid delete password",
       });
     }
 
     return next();
   } catch (err) {
     return res.status(500).json({
-      message: "Failed to verify login password",
+      message: "Failed to verify delete password",
       error: err.message,
     });
   }

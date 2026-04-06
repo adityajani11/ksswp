@@ -11,6 +11,7 @@ import SendImageMessages from "./components/SendImageMessages";
 import SendVideoMessages from "./components/SendVideoMessages";
 import SendPdfMessages from "./components/SendPdfMessages";
 import MessageHistory from "./pages/MessageHistory";
+import Settings from "./pages/Settings";
 
 export default function App() {
   return (
@@ -37,6 +38,7 @@ export default function App() {
           <Route path="video" element={<SendVideoMessages />} />
           <Route path="document" element={<SendPdfMessages />} />
           <Route path="history" element={<MessageHistory />} />
+          <Route path="settings" element={<Settings />} />
           <Route path="groups/:id" element={<GroupDetails />} />
         </Route>
 

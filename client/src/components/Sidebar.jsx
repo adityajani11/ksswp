@@ -8,11 +8,11 @@ import {
   History,
   FileDown,
   Layers3,
-  KeyRound,
+  Settings,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import Swal from "sweetalert2";
-import api, { getApiErrorMessage } from "../utils/api";
+import { getApiErrorMessage } from "../utils/api";
 import { runWithSwalLoader } from "../utils/swalLoading";
 import { fetchAllGroupsWithContacts } from "../utils/groupDirectory";
 import {
@@ -20,12 +20,7 @@ import {
   exportGroupsToExcel,
   exportGroupsToPdfZip,
 } from "../utils/groupExport";
-import {
-  DEVELOPER_PASSWORD,
-  promptDeveloperPassword,
-  promptNewLoginPassword,
-  SECURITY_MODAL_OPTIONS,
-} from "../utils/security";
+import { SECURITY_MODAL_OPTIONS } from "../utils/security";
 
 const NO_GROUPS_TO_EXPORT = "NO_GROUPS_TO_EXPORT";
 const PDF_EXPORT_OPTIONS_POPUP_CLASS = "pdf-export-options-popup";
@@ -137,9 +132,6 @@ export default function Sidebar() {
     }`;
 
   const actionStyle = `${linkBase} w-full text-left border-0 bg-yellow-600 rounded text-white`;
-  const securityActionStyle =
-    `${linkBase} w-full text-left border border-blue-100 bg-blue-50 text-blue-700`;
-
   const handleLogout = async () => {
     const result = await Swal.fire({
       title: "Logout?",
@@ -163,59 +155,6 @@ export default function Sidebar() {
     });
 
     navigate("/");
-  };
-
-  const handleChangePassword = async () => {
-    setOpen(false);
-
-    const developerPassword = await promptDeveloperPassword();
-    if (!developerPassword) {
-      return;
-    }
-
-    if (developerPassword !== DEVELOPER_PASSWORD) {
-      await Swal.fire({
-        title: "Access denied",
-        text: "Developer password is incorrect",
-        icon: "error",
-        ...SECURITY_MODAL_OPTIONS,
-      });
-      return;
-    }
-
-    const nextPasswordPayload = await promptNewLoginPassword();
-    if (!nextPasswordPayload) {
-      return;
-    }
-
-    try {
-      await runWithSwalLoader(
-        {
-          title: "Updating password",
-          text: "Saving your new login password...",
-        },
-        () =>
-          api.post("/auth/change-password", {
-            developerPassword,
-            newPassword: nextPasswordPayload.newPassword,
-            confirmPassword: nextPasswordPayload.confirmPassword,
-          }),
-      );
-
-      Swal.fire({
-        title: "Updated",
-        text: "Login password updated successfully",
-        icon: "success",
-        ...SECURITY_MODAL_OPTIONS,
-      });
-    } catch (err) {
-      Swal.fire({
-        title: "Error",
-        text: getApiErrorMessage(err, "Failed to update login password"),
-        icon: "error",
-        ...SECURITY_MODAL_OPTIONS,
-      });
-    }
   };
 
   const handleExportAllData = async () => {
@@ -372,6 +311,14 @@ export default function Sidebar() {
             <History size={18} />
             <span className="font-medium">Message History</span>
           </NavLink>
+          <NavLink
+            to="/dashboard/settings"
+            className={linkStyle}
+            onClick={() => setOpen(false)}
+          >
+            <Settings size={18} />
+            <span className="font-medium">Settings</span>
+          </NavLink>
           <button
             type="button"
             onClick={handleExportAllData}
@@ -379,14 +326,6 @@ export default function Sidebar() {
           >
             <FileDown size={18} />
             <span className="font-medium">Export All Data</span>
-          </button>
-          <button
-            type="button"
-            onClick={handleChangePassword}
-            className={securityActionStyle}
-          >
-            <KeyRound size={18} />
-            <span className="font-medium">Change Password</span>
           </button>
         </nav>
 

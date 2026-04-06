@@ -21,6 +21,44 @@ import {
 
 const PAGE_SIZE = 20;
 
+function toDisplayPhone(phone) {
+  const normalizedPhone = String(phone || "").replace(/^\+/, "").trim();
+  return normalizedPhone ? `+${normalizedPhone}` : "";
+}
+
+function getContactDisplayLabel(contact) {
+  const contactName = String(contact?.name || "").trim();
+  const phoneLabel = toDisplayPhone(contact?.phone);
+
+  if (contactName && phoneLabel) {
+    return `${contactName} (${phoneLabel})`;
+  }
+
+  if (contactName) {
+    return contactName;
+  }
+
+  if (phoneLabel) {
+    return phoneLabel;
+  }
+
+  return "Unnamed contact";
+}
+
+function summarizeLabels(labels, maxItems = 3) {
+  const normalizedLabels = (Array.isArray(labels) ? labels : [])
+    .map((label) => String(label || "").trim())
+    .filter(Boolean);
+
+  if (!normalizedLabels.length) {
+    return "";
+  }
+
+  const preview = normalizedLabels.slice(0, maxItems).join(", ");
+  const remaining = normalizedLabels.length - maxItems;
+  return remaining > 0 ? `${preview}, +${remaining} more` : preview;
+}
+
 export default function GroupDetails() {
   const { id } = useParams();
 
@@ -204,6 +242,27 @@ export default function GroupDetails() {
       ) || null,
     [moveGroups, selectedTargetGroupId],
   );
+  const contactsByPhone = useMemo(
+    () =>
+      new Map(
+        (Array.isArray(group?.contacts) ? group.contacts : []).map((contact) => [
+          String(contact.phone),
+          contact,
+        ]),
+      ),
+    [group?.contacts],
+  );
+  const activeGroupName = String(group?.name || "this group");
+
+  const getContactLabelByPhone = useCallback(
+    (contactPhone) => {
+      const normalizedPhone = String(contactPhone);
+      return getContactDisplayLabel(
+        contactsByPhone.get(normalizedPhone) || { phone: normalizedPhone },
+      );
+    },
+    [contactsByPhone],
+  );
 
   const toggleContactSelection = (contactPhone) => {
     const normalizedPhone = String(contactPhone);
@@ -237,8 +296,8 @@ export default function GroupDetails() {
   /* ----------------- CONFIRM DOWNLOAD ----------------- */
   const confirmDownload = async (type, onConfirm) => {
     const result = await Swal.fire({
-      title: `Download ${type}?`,
-      text: `Do you want to export ${filteredContacts.length} contacts as ${type}?`,
+      title: `Download ${type} from "${activeGroupName}"?`,
+      text: `Export ${filteredContacts.length} contact(s) from "${activeGroupName}" as ${type}?`,
       icon: "question",
       showCancelButton: true,
       confirmButtonText: "Yes, Download",
@@ -252,7 +311,9 @@ export default function GroupDetails() {
 
   /* -------------------- ADD CONTACT -------------------- */
   const addContact = async () => {
-    if (!name.trim()) {
+    const contactName = String(name || "").trim();
+
+    if (!contactName) {
       Swal.fire("Required", "Name is required", "warning");
       return;
     }
@@ -266,11 +327,11 @@ export default function GroupDetails() {
       const res = await runWithSwalLoader(
         {
           title: "Adding contact",
-          text: "Saving the contact...",
+          text: `Saving "${contactName}" in "${activeGroupName}"...`,
         },
         () =>
           api.post(`/groups/${id}/contacts`, {
-            name: name.trim(),
+            name: contactName,
             phone,
           }),
       );
@@ -282,21 +343,34 @@ export default function GroupDetails() {
       setShowForm(false);
       clearSelection();
 
-      Swal.fire("Added", "Contact added successfully", "success");
+      const savedGroupName = String(nextGroup?.name || activeGroupName);
+      Swal.fire(
+        "Added",
+        `"${contactName}" added to "${savedGroupName}".`,
+        "success",
+      );
     } catch (err) {
       Swal.fire(
         "Error",
-        err.response?.data?.message || "Failed to add contact",
+        err.response?.data?.message || `Failed to add "${contactName}"`,
         "error",
       );
     }
   };
 
   /* ------------------ DELETE CONTACT -------------------- */
-  const deleteContact = async (contactPhone) => {
+  const deleteContact = async (contact) => {
+    const contactPhone = String(contact?.phone || "");
+    const contactLabel = getContactDisplayLabel(contact);
+
+    if (!contactPhone) {
+      Swal.fire("Error", "Contact phone is missing", "error");
+      return;
+    }
+
     const result = await Swal.fire({
       title: "Delete contact?",
-      text: "This contact will be removed from the group.",
+      text: `"${contactLabel}" will be removed from "${activeGroupName}".`,
       icon: "warning",
       showCancelButton: true,
       confirmButtonText: "Yes, Delete",
@@ -307,14 +381,16 @@ export default function GroupDetails() {
 
     if (!result.isConfirmed) return;
 
-    const loginPassword = await promptLoginPasswordForDelete();
+    const loginPassword = await promptLoginPasswordForDelete({
+      text: `Delete password is required to delete "${contactLabel}" from "${activeGroupName}".`,
+    });
     if (!loginPassword) return;
 
     try {
       const res = await runWithSwalLoader(
         {
           title: "Deleting contact",
-          text: "Removing the contact from this group...",
+          text: `Removing "${contactLabel}" from "${activeGroupName}"...`,
         },
         () =>
           api.delete(
@@ -329,11 +405,15 @@ export default function GroupDetails() {
         prev.filter((selectedPhone) => selectedPhone !== String(contactPhone)),
       );
 
-      Swal.fire("Deleted", "Contact removed successfully", "success");
+      Swal.fire(
+        "Deleted",
+        `"${contactLabel}" removed from "${activeGroupName}".`,
+        "success",
+      );
     } catch (err) {
       Swal.fire(
         "Error",
-        err.response?.data?.message || "Failed to delete contact",
+        err.response?.data?.message || `Failed to delete "${contactLabel}"`,
         "error",
       );
     }
@@ -341,17 +421,20 @@ export default function GroupDetails() {
 
   /* -------------------- RENAME GROUP -------------------- */
   const renameGroup = async () => {
-    if (!groupName.trim()) return;
+    const nextGroupName = String(groupName || "").trim();
+    if (!nextGroupName) return;
+
+    const previousGroupName = String(group?.name || "this group");
 
     try {
       const res = await runWithSwalLoader(
         {
           title: "Renaming group",
-          text: "Updating the group name...",
+          text: `Renaming "${previousGroupName}" to "${nextGroupName}"...`,
         },
         () =>
           api.put(`/groups/${id}`, {
-            name: groupName.trim(),
+            name: nextGroupName,
           }),
       );
 
@@ -359,9 +442,13 @@ export default function GroupDetails() {
       setGroup(nextGroup);
       setGroupName(nextGroup.name);
       setEditingGroup(false);
-      Swal.fire("Updated", "Group renamed", "success");
+      Swal.fire(
+        "Updated",
+        `"${previousGroupName}" renamed to "${String(nextGroup?.name || nextGroupName)}".`,
+        "success",
+      );
     } catch {
-      Swal.fire("Error", "Failed to rename group", "error");
+      Swal.fire("Error", `Failed to rename "${previousGroupName}"`, "error");
     }
   };
 
@@ -373,7 +460,9 @@ export default function GroupDetails() {
   };
 
   const saveEditContact = async () => {
-    if (!editName.trim()) {
+    const nextContactName = String(editName || "").trim();
+
+    if (!nextContactName) {
       Swal.fire("Required", "Name is required", "warning");
       return;
     }
@@ -387,11 +476,11 @@ export default function GroupDetails() {
       const res = await runWithSwalLoader(
         {
           title: "Updating contact",
-          text: "Saving contact changes...",
+          text: `Saving "${nextContactName}" in "${activeGroupName}"...`,
         },
         () =>
           api.put(`/groups/${id}/contacts/${editingContact}`, {
-            name: editName.trim(),
+            name: nextContactName,
             phone: editPhone,
           }),
       );
@@ -400,11 +489,15 @@ export default function GroupDetails() {
       setGroup(nextGroup);
       setEditingContact(null);
 
-      Swal.fire("Updated", "Contact updated", "success");
+      Swal.fire(
+        "Updated",
+        `"${nextContactName}" updated in "${activeGroupName}".`,
+        "success",
+      );
     } catch (err) {
       Swal.fire(
         "Error",
-        err.response?.data?.message || "Failed to update contact",
+        err.response?.data?.message || `Failed to update "${nextContactName}"`,
         "error",
       );
     }
@@ -419,9 +512,15 @@ export default function GroupDetails() {
       return;
     }
 
+    const selectedContactSummary = summarizeLabels(
+      phonesToDelete.map((contactPhone) => getContactLabelByPhone(contactPhone)),
+    );
+
     const result = await Swal.fire({
-      title: "Delete selected contacts?",
-      text: `Delete ${phonesToDelete.length} contact(s) from this group.`,
+      title: `Delete ${phonesToDelete.length} contact(s)?`,
+      text: selectedContactSummary
+        ? `${selectedContactSummary} will be removed from "${activeGroupName}".`
+        : `Selected contacts will be removed from "${activeGroupName}".`,
       icon: "warning",
       showCancelButton: true,
       confirmButtonText: "Yes, Delete",
@@ -433,7 +532,9 @@ export default function GroupDetails() {
       return;
     }
 
-    const loginPassword = await promptLoginPasswordForDelete();
+    const loginPassword = await promptLoginPasswordForDelete({
+      text: `Delete password is required to delete selected contacts from "${activeGroupName}".`,
+    });
     if (!loginPassword) {
       return;
     }
@@ -442,7 +543,7 @@ export default function GroupDetails() {
       const res = await runWithSwalLoader(
         {
           title: "Deleting contacts",
-          text: "Removing selected contacts from this group...",
+          text: `Removing selected contacts from "${activeGroupName}"...`,
         },
         () =>
           api.post(`/groups/${id}/contacts/delete`, {
@@ -458,9 +559,12 @@ export default function GroupDetails() {
       }
 
       clearSelection();
+      const deletedCount = Number(
+        res.data?.deletedCount ?? phonesToDelete.length,
+      );
       Swal.fire(
         "Deleted",
-        `${res.data?.deletedCount || phonesToDelete.length} contact(s) deleted successfully.`,
+        `${deletedCount} contact(s) deleted from "${activeGroupName}".`,
         "success",
       );
     } catch (err) {
@@ -500,7 +604,7 @@ export default function GroupDetails() {
         setShowMoveModal(false);
         Swal.fire(
           "No target group",
-          "Create another group to move contacts.",
+          `Create another group to move contacts from "${activeGroupName}".`,
           "info",
         );
         return;
@@ -538,22 +642,23 @@ export default function GroupDetails() {
     }
 
     if (!selectedTargetGroupId) {
-      Swal.fire("Required", "Please choose a target group", "warning");
+      Swal.fire(
+        "Required",
+        `Please choose a target group for contacts from "${activeGroupName}".`,
+        "warning",
+      );
       return;
     }
 
     const targetGroupName = selectedTargetGroup?.name || "selected group";
+    const selectedContactSummary = summarizeLabels(
+      phonesToMove.map((contactPhone) => getContactLabelByPhone(contactPhone)),
+    );
     const result = await Swal.fire({
-      title: "Move selected contacts?",
-      html: `
-        <p>
-          Move <strong>${phonesToMove.length} contact(s)</strong> to
-          <strong> ${targetGroupName}</strong>?
-        </p>
-        <p class="mt-2 text-gray-600">
-          Contacts will be removed from this group after move.
-        </p>
-      `,
+      title: `Move ${phonesToMove.length} contact(s)?`,
+      text: selectedContactSummary
+        ? `${selectedContactSummary} will be moved from "${activeGroupName}" to "${targetGroupName}".`
+        : `Selected contacts will be moved from "${activeGroupName}" to "${targetGroupName}".`,
       icon: "question",
       showCancelButton: true,
       confirmButtonText: "Yes, Move",
@@ -569,7 +674,7 @@ export default function GroupDetails() {
       const res = await runWithSwalLoader(
         {
           title: "Moving contacts",
-          text: `Moving contacts to "${targetGroupName}"...`,
+          text: `Moving ${phonesToMove.length} contact(s) from "${activeGroupName}" to "${targetGroupName}"...`,
         },
         () =>
           api.post(`/groups/${id}/contacts/move`, {
@@ -594,7 +699,7 @@ export default function GroupDetails() {
       closeMoveModal();
       Swal.fire(
         "Moved",
-        `${res.data?.movedCount || phonesToMove.length} contact(s) moved to "${targetGroupName}".`,
+        `${Number(res.data?.movedCount ?? phonesToMove.length)} contact(s) moved from "${activeGroupName}" to "${targetGroupName}".`,
         "success",
       );
     } catch (err) {
@@ -609,7 +714,11 @@ export default function GroupDetails() {
   /* -------------------- EXPORT EXCEL -------------------- */
   const exportExcel = async () => {
     if (!filteredContacts.length) {
-      Swal.fire("No data", "No contacts to export", "warning");
+      Swal.fire(
+        "No data",
+        `No contacts to export from "${activeGroupName}"`,
+        "warning",
+      );
       return;
     }
 
@@ -635,7 +744,11 @@ export default function GroupDetails() {
   /* -------------------- EXPORT PDF -------------------- */
   const exportPDF = async () => {
     if (!filteredContacts.length) {
-      Swal.fire("No data", "No contacts to export", "warning");
+      Swal.fire(
+        "No data",
+        `No contacts to export from "${activeGroupName}"`,
+        "warning",
+      );
       return;
     }
 
@@ -927,7 +1040,7 @@ export default function GroupDetails() {
                     </button>
 
                     <button
-                      onClick={() => deleteContact(contact.phone)}
+                      onClick={() => deleteContact(contact)}
                       className="bg-red-500 rounded px-2 text-white"
                     >
                       Delete
