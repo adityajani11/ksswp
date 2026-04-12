@@ -17,6 +17,7 @@ export default function SendPdfMessages() {
     batches,
     groupsLoading,
     batchesLoading,
+    mobileSearchMatches,
     selectionLoading,
     selectedGroups,
     selectedBatches,
@@ -24,6 +25,8 @@ export default function SendPdfMessages() {
     expandedGroups,
     search,
     setSearch,
+    mobileSearch,
+    setMobileSearch,
     ensureSelectionOptionsLoaded,
     buildRecipientPayload,
     discardSelection,
@@ -33,6 +36,7 @@ export default function SendPdfMessages() {
     toggleBatch,
     toggleGroupExpand,
     selectAll,
+    filterContactsByMobile,
   } = useRecipientGroups();
 
   const fileInputRef = useRef(null);
@@ -113,6 +117,7 @@ export default function SendPdfMessages() {
 
     discardSelection();
     setSearch("");
+    setMobileSearch("");
     setShowGroupModal(true);
 
     const nextGroups = await ensureSelectionOptionsLoaded();
@@ -270,6 +275,50 @@ export default function SendPdfMessages() {
               />
             </div>
 
+            <div className="flex items-center gap-2 mb-3 border rounded px-3 py-2">
+              <Search size={16} className="text-gray-400" />
+              <input
+                value={mobileSearch}
+                onChange={(e) => setMobileSearch(e.target.value)}
+                placeholder="Search by mobile number..."
+                className="w-full outline-none"
+              />
+            </div>
+
+            {String(mobileSearch || "").trim() && (
+              <div className="mb-3 border rounded p-3 space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  Matching Numbers
+                </p>
+                {mobileSearchMatches.length === 0 ? (
+                  <p className="text-sm text-gray-500">
+                    No matching mobile numbers found.
+                  </p>
+                ) : (
+                  <div className="max-h-40 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {mobileSearchMatches.map((contact) => (
+                      <label
+                        key={contact.phone}
+                        className="flex items-center gap-2 text-sm"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedContacts.includes(contact.phone)}
+                          onChange={() => toggleContact(contact.phone)}
+                        />
+                        <span>
+                          {contact.name || "Unnamed"}
+                          <span className="text-xs text-gray-500 ml-1">
+                            (+{contact.phone})
+                          </span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="flex gap-2 mb-3">
               <button
                 onClick={selectAll}
@@ -325,12 +374,22 @@ export default function SendPdfMessages() {
 
                     {expandedGroups.includes(group._id) && (
                       <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        {isGroupLoading(group._id) ? (
-                          <p className="text-sm text-gray-500">Loading contacts...</p>
-                        ) : (group.contacts || []).length === 0 ? (
-                          <p className="text-sm text-gray-500">No contacts in this group.</p>
-                        ) : (
-                          group.contacts.map((contact) => (
+                        {(() => {
+                          const filteredContacts = filterContactsByMobile(group.contacts || []);
+                          if (isGroupLoading(group._id)) {
+                            return <p className="text-sm text-gray-500">Loading contacts...</p>;
+                          }
+                          if ((group.contacts || []).length === 0) {
+                            return <p className="text-sm text-gray-500">No contacts in this group.</p>;
+                          }
+                          if (filteredContacts.length === 0) {
+                            return (
+                              <p className="text-sm text-gray-500">
+                                No contacts match this mobile number.
+                              </p>
+                            );
+                          }
+                          return filteredContacts.map((contact) => (
                             <label
                               key={contact.phone}
                               className="flex items-center gap-2"
@@ -347,8 +406,8 @@ export default function SendPdfMessages() {
                                 </span>
                               </span>
                             </label>
-                          ))
-                        )}
+                          ));
+                        })()}
                       </div>
                     )}
                   </div>

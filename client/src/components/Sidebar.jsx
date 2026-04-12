@@ -7,6 +7,7 @@ import {
   X,
   History,
   FileDown,
+  FileUp,
   Layers3,
   Settings,
 } from "lucide-react";
@@ -318,6 +319,14 @@ export default function Sidebar() {
           >
             <Settings size={18} />
             <span className="font-medium">Settings</span>
+          </NavLink>
+          <NavLink
+            to="/dashboard/import"
+            className={linkStyle}
+            onClick={() => setOpen(false)}
+          >
+            <FileUp size={18} />
+            <span className="font-medium">Import Contacts</span>
           </NavLink>
           <button
             type="button"

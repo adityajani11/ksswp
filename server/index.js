@@ -10,6 +10,8 @@ const whatsappRoutes = require("./routes/whatsapp.routes");
 const uploadRoutes = require("./routes/upload.routes");
 const groupRoutes = require("./routes/group.routes");
 const batchRoutes = require("./routes/batch.routes");
+const superadminRoutes = require("./routes/superadmin.routes");
+const importRoutes = require("./routes/import.routes");
 
 const app = express();
 const BODY_LIMIT = String(process.env.REQUEST_BODY_LIMIT || "8mb").trim() || "8mb";
@@ -34,6 +36,8 @@ app.use("/api/whatsapp", whatsappRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/groups", groupRoutes);
 app.use("/api/batches", batchRoutes);
+app.use("/api/superadmin", superadminRoutes);
+app.use("/api/import", importRoutes);
 
 app.use((err, req, res, next) => {
   if (err?.type === "entity.too.large" || err?.status === 413) {

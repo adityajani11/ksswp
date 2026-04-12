@@ -11,12 +11,19 @@ import SendImageMessages from "./components/SendImageMessages";
 import SendVideoMessages from "./components/SendVideoMessages";
 import SendPdfMessages from "./components/SendPdfMessages";
 import MessageHistory from "./pages/MessageHistory";
+import ImportContacts from "./pages/ImportContacts/ImportContacts";
 import Settings from "./pages/Settings";
+import SuperAdminLogin from "./pages/SuperAdmin/SuperAdminLogin";
+import SuperAdminDashboard from "./pages/SuperAdmin/SuperAdminDashboard";
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* SUPER ADMIN */}
+        <Route path="/admin" element={<SuperAdminLogin />} />
+        <Route path="/admin/dashboard" element={<SuperAdminDashboard />} />
+
         {/* LOGIN */}
         <Route path="/" element={<LoginPage />} />
 
@@ -38,6 +45,7 @@ export default function App() {
           <Route path="video" element={<SendVideoMessages />} />
           <Route path="document" element={<SendPdfMessages />} />
           <Route path="history" element={<MessageHistory />} />
+          <Route path="import" element={<ImportContacts />} />
           <Route path="settings" element={<Settings />} />
           <Route path="groups/:id" element={<GroupDetails />} />
         </Route>

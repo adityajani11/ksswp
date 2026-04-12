@@ -1,4 +1,4 @@
-import { useDeferredValue, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useRef, useState } from "react";
 import Swal from "sweetalert2";
 import api, { getApiErrorMessage } from "../utils/api";
 import { fetchGroupSummaries, fetchGroupsByIds } from "../utils/groupDirectory";
@@ -53,6 +53,63 @@ function filterGroupsByName(groups, search) {
 
   return groups.filter((group) =>
     String(group.name || "").toLowerCase().includes(query),
+  );
+}
+
+function filterContactsByMobile(contacts, mobileSearch) {
+  const queryDigits = String(mobileSearch || "").replace(/\D/g, "");
+  if (!queryDigits) {
+    return contacts;
+  }
+
+  return (Array.isArray(contacts) ? contacts : []).filter((contact) =>
+    String(contact?.phone || "").replace(/\D/g, "").includes(queryDigits),
+  );
+}
+
+function buildMobileSearchMatches(groups, mobileSearch) {
+  const queryDigits = String(mobileSearch || "").replace(/\D/g, "");
+  if (!queryDigits) {
+    return [];
+  }
+
+  const matchesByPhone = new Map();
+
+  for (const group of Array.isArray(groups) ? groups : []) {
+    const groupName = String(group?.name || "").trim();
+
+    for (const contact of Array.isArray(group?.contacts) ? group.contacts : []) {
+      const phone = String(contact?.phone || "").trim();
+      if (!phone) {
+        continue;
+      }
+
+      const normalizedPhone = phone.replace(/\D/g, "");
+      if (!normalizedPhone.includes(queryDigits)) {
+        continue;
+      }
+
+      if (!matchesByPhone.has(phone)) {
+        matchesByPhone.set(phone, {
+          phone,
+          name: String(contact?.name || "").trim(),
+          groupNames: groupName ? [groupName] : [],
+        });
+        continue;
+      }
+
+      const existing = matchesByPhone.get(phone);
+      if (
+        groupName &&
+        !existing.groupNames.includes(groupName)
+      ) {
+        existing.groupNames.push(groupName);
+      }
+    }
+  }
+
+  return [...matchesByPhone.values()].sort((a, b) =>
+    a.phone.localeCompare(b.phone),
   );
 }
 
@@ -125,6 +182,7 @@ export default function useRecipientGroups() {
   const [_manuallyDeselected, setManuallyDeselected] = useState([]);
   const [expandedGroups, setExpandedGroups] = useState([]);
   const [search, setSearch] = useState("");
+  const [mobileSearch, setMobileSearch] = useState("");
 
   const deferredSearch = useDeferredValue(search);
   const groupsRef = useRef([]);
@@ -496,10 +554,26 @@ export default function useRecipientGroups() {
           .includes(trimmedDeferredSearch.toLowerCase()),
       )
     : batches;
+  const mobileSearchMatches = buildMobileSearchMatches(groups, mobileSearch);
+
+  useEffect(() => {
+    const queryDigits = String(mobileSearch || "").replace(/\D/g, "");
+    if (!queryDigits) {
+      return;
+    }
+
+    const allGroupIds = groupsRef.current.map((group) => String(group._id));
+    if (!allGroupIds.length) {
+      return;
+    }
+
+    ensureGroupDetailsLoaded(allGroupIds);
+  }, [mobileSearch]);
 
   return {
     groups: visibleGroups,
     batches: visibleBatches,
+    mobileSearchMatches,
     groupsLoading,
     batchesLoading,
     selectionLoading,
@@ -509,6 +583,8 @@ export default function useRecipientGroups() {
     expandedGroups,
     search,
     setSearch,
+    mobileSearch,
+    setMobileSearch,
     ensureGroupSummariesLoaded,
     ensureBatchesLoaded,
     ensureSelectionOptionsLoaded,
@@ -520,6 +596,8 @@ export default function useRecipientGroups() {
     toggleBatch,
     toggleGroupExpand,
     selectAll,
+    filterContactsByMobile: (contacts) =>
+      filterContactsByMobile(contacts, mobileSearch),
   };
 }
 

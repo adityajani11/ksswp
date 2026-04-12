@@ -27,6 +27,11 @@ const groupSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
     },
+    importJobId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "ImportJob",
+      index: true
+    },
   },
   { timestamps: true }
 );
