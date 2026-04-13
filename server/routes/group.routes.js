@@ -80,6 +80,69 @@ function applySession(query, session) {
   return session ? query.session(session) : query;
 }
 
+async function findConflictingPhoneGroups({
+  phones,
+  excludedGroupIds = [],
+  session = null,
+}) {
+  const normalizedPhones = (Array.isArray(phones) ? phones : [])
+    .map((phone) => String(phone || "").trim())
+    .filter(Boolean);
+  if (!normalizedPhones.length) {
+    return new Map();
+  }
+
+  const normalizedExcludedIds = (Array.isArray(excludedGroupIds)
+    ? excludedGroupIds
+    : [excludedGroupIds]
+  )
+    .map((groupId) => String(groupId || "").trim())
+    .filter((groupId) => mongoose.Types.ObjectId.isValid(groupId));
+
+  const query = {
+    "contacts.phone": {
+      $in: normalizedPhones,
+    },
+  };
+
+  if (normalizedExcludedIds.length) {
+    query._id = { $nin: normalizedExcludedIds };
+  }
+
+  const groupsWithConflicts = await applySession(
+    Group.find(query).select("name contacts.phone").lean(),
+    session,
+  );
+
+  const requestedPhoneSet = new Set(normalizedPhones);
+  const conflictsByPhone = new Map();
+
+  for (const group of groupsWithConflicts) {
+    const groupName = String(group?.name || "").trim() || "Unnamed group";
+    const contacts = Array.isArray(group?.contacts) ? group.contacts : [];
+
+    for (const contact of contacts) {
+      const contactPhone = String(contact?.phone || "").trim();
+      if (!requestedPhoneSet.has(contactPhone)) {
+        continue;
+      }
+
+      if (!conflictsByPhone.has(contactPhone)) {
+        conflictsByPhone.set(contactPhone, new Set());
+      }
+
+      conflictsByPhone.get(contactPhone).add(groupName);
+    }
+  }
+
+  const serializedConflicts = new Map();
+  for (const [phone, groupNames] of conflictsByPhone.entries()) {
+    serializedConflicts.set(phone, [...groupNames]);
+  }
+
+  return serializedConflicts;
+}
+
 async function moveContactsBetweenGroups({
   sourceGroupId,
   targetGroupId,
@@ -109,18 +172,27 @@ async function moveContactsBetweenGroups({
     throw createHttpError(404, "One or more contacts no longer exist in source group");
   }
 
-  const targetPhoneSet = new Set(targetGroup.contacts.map((contact) => String(contact.phone)));
+  const conflictingGroupsByPhone = await findConflictingPhoneGroups({
+    phones,
+    excludedGroupIds: [sourceGroupId],
+    session,
+  });
+
   const movedPhones = [];
   const skippedDuplicates = [];
+  const skippedDetails = [];
 
   for (const phone of phones) {
-    if (targetPhoneSet.has(phone)) {
+    if (conflictingGroupsByPhone.has(phone)) {
       skippedDuplicates.push(phone);
+      skippedDetails.push({
+        phone,
+        existingInGroups: conflictingGroupsByPhone.get(phone) || [],
+      });
       continue;
     }
 
     movedPhones.push(phone);
-    targetPhoneSet.add(phone);
   }
 
   const movedPhoneSet = new Set(movedPhones);
@@ -146,6 +218,7 @@ async function moveContactsBetweenGroups({
     targetGroup,
     movedPhones,
     skippedDuplicates,
+    skippedDetails,
     skippedCount: skippedDuplicates.length,
     movedCount: contactsToMove.length,
   };
@@ -496,6 +569,7 @@ router.post("/:groupId/contacts/move", async (req, res) => {
       movedPhones: movedResult.movedPhones,
       skippedCount: movedResult.skippedCount,
       skippedDuplicates: movedResult.skippedDuplicates,
+      skippedDetails: movedResult.skippedDetails,
       sourceGroup: movedResult.sourceGroup,
       targetGroup: movedResult.targetGroup,
     });

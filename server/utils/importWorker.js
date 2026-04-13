@@ -80,13 +80,57 @@ async function createGroupWithUniqueName({
   }
 }
 
-async function loadExistingDatabasePhoneSet() {
-  const existingPhones = await Group.distinct("contacts.phone");
-  return new Set(
-    (Array.isArray(existingPhones) ? existingPhones : [])
-      .map((phone) => String(phone || "").trim())
+function formatExistingGroupNames(groupNames) {
+  const normalizedGroupNames = [...new Set(
+    (Array.isArray(groupNames) ? groupNames : [])
+      .map((groupName) => String(groupName || "").trim())
       .filter(Boolean),
-  );
+  )];
+
+  if (!normalizedGroupNames.length) {
+    return "another group";
+  }
+
+  return normalizedGroupNames
+    .sort((left, right) => left.localeCompare(right))
+    .map((groupName) => `"${groupName}"`)
+    .join(", ");
+}
+
+function buildExistingPhoneReason(groupNames) {
+  return `Phone already exists in ${formatExistingGroupNames(groupNames)}`;
+}
+
+async function loadExistingDatabasePhoneGroupsMap() {
+  const groups = await Group.find()
+    .select("name contacts.phone")
+    .lean();
+  const groupsByPhone = new Map();
+
+  for (const group of Array.isArray(groups) ? groups : []) {
+    const groupName = String(group?.name || "").trim() || "Unnamed group";
+    const contacts = Array.isArray(group?.contacts) ? group.contacts : [];
+
+    for (const contact of contacts) {
+      const phone = String(contact?.phone || "").trim();
+      if (!phone) {
+        continue;
+      }
+
+      if (!groupsByPhone.has(phone)) {
+        groupsByPhone.set(phone, new Set());
+      }
+
+      groupsByPhone.get(phone).add(groupName);
+    }
+  }
+
+  const serializedGroupsByPhone = new Map();
+  for (const [phone, groupNames] of groupsByPhone.entries()) {
+    serializedGroupsByPhone.set(phone, [...groupNames]);
+  }
+
+  return serializedGroupsByPhone;
 }
 
 function processWorkbook(filePath, createWorksheetTask) {
@@ -281,7 +325,7 @@ async function start() {
       error: null,
     });
 
-    const existingDatabasePhoneSet = await loadExistingDatabasePhoneSet();
+    const existingDatabasePhoneGroupsMap = await loadExistingDatabasePhoneGroupsMap();
     const importedPhoneSet = new Set();
 
     await processWorkbook(filePath, (worksheet) => {
@@ -378,7 +422,9 @@ async function start() {
                   continue;
                 }
 
-                if (existingDatabasePhoneSet.has(formattedPhone)) {
+                const existingGroupNames =
+                  existingDatabasePhoneGroupsMap.get(formattedPhone) || [];
+                if (existingGroupNames.length > 0) {
                   totalSkipped += 1;
                   logEntries.push({
                     jobId,
@@ -386,7 +432,7 @@ async function start() {
                     row: item.rowNum,
                     name: rawName,
                     contact_number: originalPhone,
-                    reason: "Phone already exists in database",
+                    reason: buildExistingPhoneReason(existingGroupNames),
                   });
                   continue;
                 }

@@ -702,7 +702,7 @@ export default function GroupDetails() {
       Swal.fire(
         skippedCount > 0 ? "Moved with skips" : "Moved",
         skippedCount > 0
-          ? `${movedCount} contact(s) moved from "${activeGroupName}" to "${targetGroupName}". ${skippedCount} duplicate contact(s) already existed in "${targetGroupName}" and were skipped.`
+          ? `${movedCount} contact(s) moved from "${activeGroupName}" to "${targetGroupName}". ${skippedCount} contact(s) were skipped because those numbers already existed in another group.`
           : `${movedCount} contact(s) moved from "${activeGroupName}" to "${targetGroupName}".`,
         "success",
       );
