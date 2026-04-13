@@ -378,9 +378,8 @@ export default function Groups() {
 
     try {
       let movedCount = 0;
-      const movedPhoneSet = new Set(
-        selectedContacts.map((contact) => String(contact.phone)),
-      );
+      let skippedCount = 0;
+      const movedSelectionIdSet = new Set();
 
       await runWithSwalLoader(
         {
@@ -397,7 +396,25 @@ export default function Groups() {
               phones,
             });
 
-            movedCount += Number(res.data?.movedCount ?? phones.length);
+            const payload = res.data || {};
+            const movedPhones = Array.isArray(payload.movedPhones)
+              ? payload.movedPhones.map((phone) => String(phone || "")).filter(Boolean)
+              : [];
+            const movedInCall = Math.max(
+              0,
+              Number(payload.movedCount ?? movedPhones.length) || 0,
+            );
+            const skippedInCall = Number.isFinite(Number(payload.skippedCount))
+              ? Math.max(0, Number(payload.skippedCount))
+              : Math.max(0, phones.length - movedPhones.length);
+
+            movedCount += movedInCall;
+            skippedCount += skippedInCall;
+
+            movedPhones.forEach((phone) => {
+              movedSelectionIdSet.add(`${sourceGroupId}::${phone}`);
+            });
+
             const nextSourceGroup =
               upsertCachedGroup(res.data?.sourceGroup) || res.data?.sourceGroup;
             const nextTargetGroup =
@@ -411,7 +428,7 @@ export default function Groups() {
 
       setMatchingContacts((prev) =>
         prev.map((contact) =>
-          movedPhoneSet.has(String(contact.phone))
+          movedSelectionIdSet.has(getSearchedContactSelectionId(contact))
             ? {
                 ...contact,
                 key: `${selectedTargetGroupId}-${contact.phone}-${contact.name || ""}`,
@@ -425,8 +442,10 @@ export default function Groups() {
       setSelectedContactIds([]);
       closeMoveModal();
       Swal.fire(
-        "Moved",
-        `${movedCount || selectedContacts.length} contact(s) moved from ${selectedSourceGroupSummary} to "${targetGroupName}".`,
+        skippedCount > 0 ? "Moved with skips" : "Moved",
+        skippedCount > 0
+          ? `${movedCount} contact(s) moved from ${selectedSourceGroupSummary} to "${targetGroupName}". ${skippedCount} duplicate contact(s) already existed in "${targetGroupName}" and were skipped.`
+          : `${movedCount} contact(s) moved from ${selectedSourceGroupSummary} to "${targetGroupName}".`,
         "success",
       );
     } catch (err) {

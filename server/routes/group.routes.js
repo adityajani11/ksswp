@@ -110,34 +110,43 @@ async function moveContactsBetweenGroups({
   }
 
   const targetPhoneSet = new Set(targetGroup.contacts.map((contact) => String(contact.phone)));
-  const conflictingPhone = phones.find((phone) => targetPhoneSet.has(phone));
+  const movedPhones = [];
+  const skippedDuplicates = [];
 
-  if (conflictingPhone) {
-    throw createHttpError(
-      409,
-      `Cannot move contact +${conflictingPhone}. It already exists in "${targetGroup.name}".`,
-    );
+  for (const phone of phones) {
+    if (targetPhoneSet.has(phone)) {
+      skippedDuplicates.push(phone);
+      continue;
+    }
+
+    movedPhones.push(phone);
+    targetPhoneSet.add(phone);
   }
 
-  const selectedPhoneSet = new Set(phones);
-  const contactsToMove = phones.map((phone) => sourceContactByPhone.get(phone));
+  const movedPhoneSet = new Set(movedPhones);
+  const contactsToMove = movedPhones.map((phone) => sourceContactByPhone.get(phone));
 
-  sourceGroup.contacts = sourceGroup.contacts.filter(
-    (contact) => !selectedPhoneSet.has(String(contact.phone)),
-  );
-  targetGroup.contacts.push(
-    ...contactsToMove.map((contact) => ({
-      name: String(contact.name || "").trim(),
-      phone: String(contact.phone),
-    })),
-  );
+  if (contactsToMove.length > 0) {
+    sourceGroup.contacts = sourceGroup.contacts.filter(
+      (contact) => !movedPhoneSet.has(String(contact.phone)),
+    );
+    targetGroup.contacts.push(
+      ...contactsToMove.map((contact) => ({
+        name: String(contact.name || "").trim(),
+        phone: String(contact.phone),
+      })),
+    );
 
-  await sourceGroup.save({ session });
-  await targetGroup.save({ session });
+    await sourceGroup.save({ session });
+    await targetGroup.save({ session });
+  }
 
   return {
     sourceGroup,
     targetGroup,
+    movedPhones,
+    skippedDuplicates,
+    skippedCount: skippedDuplicates.length,
     movedCount: contactsToMove.length,
   };
 }
@@ -484,6 +493,9 @@ router.post("/:groupId/contacts/move", async (req, res) => {
 
     res.json({
       movedCount: movedResult.movedCount,
+      movedPhones: movedResult.movedPhones,
+      skippedCount: movedResult.skippedCount,
+      skippedDuplicates: movedResult.skippedDuplicates,
       sourceGroup: movedResult.sourceGroup,
       targetGroup: movedResult.targetGroup,
     });
