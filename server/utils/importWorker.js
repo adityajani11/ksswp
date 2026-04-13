@@ -80,6 +80,15 @@ async function createGroupWithUniqueName({
   }
 }
 
+async function loadExistingDatabasePhoneSet() {
+  const existingPhones = await Group.distinct("contacts.phone");
+  return new Set(
+    (Array.isArray(existingPhones) ? existingPhones : [])
+      .map((phone) => String(phone || "").trim())
+      .filter(Boolean),
+  );
+}
+
 function processWorkbook(filePath, createWorksheetTask) {
   return new Promise((resolve, reject) => {
     const workbookReader = new XlsxStreamReader();
@@ -272,6 +281,9 @@ async function start() {
       error: null,
     });
 
+    const existingDatabasePhoneSet = await loadExistingDatabasePhoneSet();
+    const importedPhoneSet = new Set();
+
     await processWorkbook(filePath, (worksheet) => {
       return new Promise((resolve, reject) => {
         const sheetName =
@@ -353,6 +365,32 @@ async function start() {
                   continue;
                 }
 
+                if (importedPhoneSet.has(formattedPhone)) {
+                  totalSkipped += 1;
+                  logEntries.push({
+                    jobId,
+                    sheetName,
+                    row: item.rowNum,
+                    name: rawName,
+                    contact_number: originalPhone,
+                    reason: "Duplicate found in this import file",
+                  });
+                  continue;
+                }
+
+                if (existingDatabasePhoneSet.has(formattedPhone)) {
+                  totalSkipped += 1;
+                  logEntries.push({
+                    jobId,
+                    sheetName,
+                    row: item.rowNum,
+                    name: rawName,
+                    contact_number: originalPhone,
+                    reason: "Phone already exists in database",
+                  });
+                  continue;
+                }
+
                 candidateByPhone.set(formattedPhone, {
                   rowNum: item.rowNum,
                   name: rawName,
@@ -363,6 +401,7 @@ async function start() {
               for (const phone of candidateByPhone.keys()) {
                 const info = candidateByPhone.get(phone);
                 seenPhonesInSheet.add(phone);
+                importedPhoneSet.add(phone);
                 validContactsForSheet.push({
                   name: info.name,
                   phone,

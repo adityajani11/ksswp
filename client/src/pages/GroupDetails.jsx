@@ -697,9 +697,13 @@ export default function GroupDetails() {
 
       clearSelection();
       closeMoveModal();
+      const movedCount = Math.max(0, Number(res.data?.movedCount) || 0);
+      const skippedCount = Math.max(0, Number(res.data?.skippedCount) || 0);
       Swal.fire(
-        "Moved",
-        `${Number(res.data?.movedCount ?? phonesToMove.length)} contact(s) moved from "${activeGroupName}" to "${targetGroupName}".`,
+        skippedCount > 0 ? "Moved with skips" : "Moved",
+        skippedCount > 0
+          ? `${movedCount} contact(s) moved from "${activeGroupName}" to "${targetGroupName}". ${skippedCount} duplicate contact(s) already existed in "${targetGroupName}" and were skipped.`
+          : `${movedCount} contact(s) moved from "${activeGroupName}" to "${targetGroupName}".`,
         "success",
       );
     } catch (err) {
