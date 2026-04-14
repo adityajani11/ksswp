@@ -204,14 +204,17 @@ export default function SendGroupMessages() {
       </div>
 
       {showGroupModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white w-full max-w-2xl rounded-xl p-3 shadow-lg">
-            <h3 className="text-lg font-semibold mb-3 flex justify-between">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/40 p-3 sm:p-4">
+          <div className="flex min-h-full items-center justify-center">
+            <div className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl bg-white p-3 shadow-lg">
+              <h3 className="mb-3 flex flex-wrap justify-between gap-2 text-lg font-semibold">
               Select Recipients
               <span className="text-sm text-gray-500">
                 {selectedContacts.length} selected
               </span>
-            </h3>
+              </h3>
+
+              <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto pr-1">
 
             <div className="flex items-center gap-2 mb-3 border rounded px-3 py-2">
               <Search size={16} className="text-gray-400" />
@@ -413,7 +416,9 @@ export default function SendGroupMessages() {
               )}
             </div>
 
-            <div className="flex justify-end gap-2 mt-4">
+              </div>
+
+              <div className="mt-4 flex justify-end gap-2 border-t pt-3">
               <button
                 className="border px-4 py-2 rounded"
                 onClick={() => setShowGroupModal(false)}
@@ -428,6 +433,7 @@ export default function SendGroupMessages() {
               >
                 Send
               </button>
+              </div>
             </div>
           </div>
         </div>
