@@ -16,6 +16,7 @@ import Settings from "./pages/Settings";
 import SuperAdminLogin from "./pages/SuperAdmin/SuperAdminLogin";
 import SuperAdminDashboard from "./pages/SuperAdmin/SuperAdminDashboard";
 
+// Main App component with routing
 export default function App() {
   return (
     <BrowserRouter>
