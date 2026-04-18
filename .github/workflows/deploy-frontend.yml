@@ -19,6 +19,7 @@ jobs:
         with:
           node-version: 22 # ✅ better than 18 (future-safe)
           cache: "npm" # 🚀 speed boost
+          cache-dependency-path: client/package-lock.json
 
       - name: Install & Build
         working-directory: client
