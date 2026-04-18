@@ -1,4 +1,10 @@
-import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import Swal from "sweetalert2";
@@ -11,7 +17,9 @@ function getVisibleContacts(group, query, phoneQuery) {
     return contacts;
   }
 
-  const groupMatches = String(group?.name || "").toLowerCase().includes(query);
+  const groupMatches = String(group?.name || "")
+    .toLowerCase()
+    .includes(query);
   if (groupMatches) {
     return contacts;
   }
@@ -38,7 +46,9 @@ export default function BatchDetails() {
   const [expandedGroupIds, setExpandedGroupIds] = useState([]);
 
   const deferredSearch = useDeferredValue(search);
-  const normalizedSearch = String(deferredSearch || "").trim().toLowerCase();
+  const normalizedSearch = String(deferredSearch || "")
+    .trim()
+    .toLowerCase();
   const phoneSearch = String(deferredSearch || "").replace(/\D/g, "");
 
   const handleSearchChange = (e) => {
@@ -52,7 +62,11 @@ export default function BatchDetails() {
       setBatch(res.data || null);
     } catch (err) {
       setBatch(null);
-      Swal.fire("Error", getApiErrorMessage(err, "Failed to load batch"), "error");
+      Swal.fire(
+        "Error",
+        getApiErrorMessage(err, "Failed to load batch"),
+        "error",
+      );
     } finally {
       setLoading(false);
     }
@@ -95,7 +109,9 @@ export default function BatchDetails() {
 
   const allFilteredExpanded =
     filteredGroups.length > 0 &&
-    filteredGroups.every((group) => expandedGroupIds.includes(String(group._id)));
+    filteredGroups.every((group) =>
+      expandedGroupIds.includes(String(group._id)),
+    );
 
   const toggleGroupExpand = (groupId) => {
     const normalizedGroupId = String(groupId);
@@ -122,29 +138,39 @@ export default function BatchDetails() {
   };
 
   if (loading) {
-    return <p className="text-gray-500">Loading batch...</p>;
+    return (
+      <div className="app-page">
+        <div className="app-empty-state">Loading batch...</div>
+      </div>
+    );
   }
 
   if (!batch) {
-    return <p className="text-gray-500">Batch not found.</p>;
+    return (
+      <div className="app-page">
+        <div className="app-empty-state">Batch not found.</div>
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-5">
-      <div className="space-y-2">
-        <h2 className="text-2xl font-semibold">{batch.name}</h2>
+    <div className="app-page">
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">{batch.name}</h1>
+        </div>
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">
+          <span className="chip chip-primary">
             {batch.groupCount || 0} Groups
           </span>
-          <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full">
+          <span className="chip chip-success">
             {batch.contactCount || 0} Contacts
           </span>
         </div>
       </div>
 
       {batch.groupCount > 0 && (
-        <div className="bg-white border rounded p-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="app-toolbar">
           <input
             type="text"
             inputMode="text"
@@ -152,13 +178,13 @@ export default function BatchDetails() {
             value={search}
             onChange={handleSearchChange}
             placeholder="Search group or contact..."
-            className="w-full md:w-80 border p-2 rounded"
+            className="app-field w-full md:w-80"
           />
           <button
             type="button"
             onClick={toggleExpandAllFiltered}
             disabled={filteredGroups.length === 0}
-            className="border px-3 py-2 rounded text-sm disabled:opacity-50"
+            className="btn btn-secondary btn-sm"
           >
             {allFilteredExpanded ? "Collapse Filtered" : "Expand Filtered"}
           </button>
@@ -166,11 +192,13 @@ export default function BatchDetails() {
       )}
 
       {batch.groupCount === 0 ? (
-        <div className="bg-gray-50 border rounded p-4 text-gray-600">
+        <div className="app-empty-state">
           No groups are linked to this batch.
         </div>
       ) : filteredGroups.length === 0 ? (
-        <p className="text-gray-500 italic">No groups or contacts match your search.</p>
+        <div className="app-empty-state">
+          No groups or contacts match your search.
+        </div>
       ) : (
         <div className="space-y-3">
           {filteredGroups.map((group) => {
@@ -182,18 +210,24 @@ export default function BatchDetails() {
             );
 
             return (
-              <div key={group._id} className="bg-white border rounded">
-                <div className="p-3 flex flex-wrap items-center justify-between gap-3">
+              <div key={group._id} className="app-card">
+                <div className="flex flex-wrap items-center justify-between gap-3 p-4">
                   <div className="flex items-center gap-2 min-w-0">
                     <button
                       type="button"
                       onClick={() => toggleGroupExpand(group._id)}
-                      className="text-gray-500"
+                      className="btn btn-secondary btn-icon"
                     >
-                      {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                      {isExpanded ? (
+                        <ChevronDown size={16} />
+                      ) : (
+                        <ChevronRight size={16} />
+                      )}
                     </button>
-                    <h3 className="font-semibold truncate">{group.name}</h3>
-                    <span className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded-full shrink-0">
+                    <h3 className="truncate font-semibold text-slate-900">
+                      {group.name}
+                    </h3>
+                    <span className="chip chip-neutral shrink-0">
                       {group.contactCount || 0} Contacts
                     </span>
                   </div>
@@ -201,25 +235,31 @@ export default function BatchDetails() {
                   <button
                     type="button"
                     onClick={() => navigate(`/dashboard/groups/${group._id}`)}
-                    className="text-sm border px-3 py-1.5 rounded"
+                    className="btn btn-secondary btn-sm"
                   >
                     Open Group
                   </button>
                 </div>
 
                 {isExpanded && (
-                  <div className="border-t p-3">
+                  <div className="border-t border-slate-200/80 p-4">
                     {visibleContacts.length === 0 ? (
-                      <p className="text-sm text-gray-500">No contacts for this search.</p>
+                      <p className="text-sm text-slate-500">
+                        No contacts for this search.
+                      </p>
                     ) : (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         {visibleContacts.map((contact) => (
                           <div
                             key={`${group._id}-${contact.phone}`}
-                            className="border rounded p-2 bg-gray-50"
+                            className="rounded-2xl border border-slate-200 bg-slate-50/80 p-3"
                           >
-                            <p className="font-medium text-sm">{contact.name}</p>
-                            <p className="text-xs text-gray-600">+{contact.phone}</p>
+                            <p className="text-sm font-semibold text-slate-900">
+                              {contact.name}
+                            </p>
+                            <p className="text-xs text-slate-500">
+                              +{contact.phone}
+                            </p>
                           </div>
                         ))}
                       </div>

@@ -1,4 +1,10 @@
-import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { MoreVertical } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import Swal from "sweetalert2";
@@ -57,7 +63,11 @@ export default function Batches() {
       setBatches(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       setBatches([]);
-      Swal.fire("Error", getApiErrorMessage(err, "Failed to load batches"), "error");
+      Swal.fire(
+        "Error",
+        getApiErrorMessage(err, "Failed to load batches"),
+        "error",
+      );
     } finally {
       setLoading(false);
     }
@@ -73,7 +83,11 @@ export default function Batches() {
       const groupSummaries = await fetchGroupSummaries();
       setGroups(Array.isArray(groupSummaries) ? groupSummaries : []);
     } catch (err) {
-      Swal.fire("Error", getApiErrorMessage(err, "Failed to load groups"), "error");
+      Swal.fire(
+        "Error",
+        getApiErrorMessage(err, "Failed to load groups"),
+        "error",
+      );
     } finally {
       setGroupsLoading(false);
     }
@@ -104,26 +118,34 @@ export default function Batches() {
   }, [openMenuBatchId]);
 
   const filteredBatches = useMemo(() => {
-    const query = String(deferredSearch || "").trim().toLowerCase();
+    const query = String(deferredSearch || "")
+      .trim()
+      .toLowerCase();
 
     if (!query) {
       return batches;
     }
 
     return batches.filter((batch) =>
-      String(batch.name || "").toLowerCase().includes(query),
+      String(batch.name || "")
+        .toLowerCase()
+        .includes(query),
     );
   }, [batches, deferredSearch]);
 
   const filteredGroups = useMemo(() => {
-    const query = String(deferredGroupSearch || "").trim().toLowerCase();
+    const query = String(deferredGroupSearch || "")
+      .trim()
+      .toLowerCase();
 
     if (!query) {
       return groups;
     }
 
     return groups.filter((group) =>
-      String(group.name || "").toLowerCase().includes(query),
+      String(group.name || "")
+        .toLowerCase()
+        .includes(query),
     );
   }, [groups, deferredGroupSearch]);
 
@@ -177,7 +199,9 @@ export default function Batches() {
     setEditingBatchId(String(batch._id));
     setName(String(batch.name || ""));
     setGroupSearch("");
-    setSelectedGroupIds((batch.groupIds || []).map((groupId) => String(groupId)));
+    setSelectedGroupIds(
+      (batch.groupIds || []).map((groupId) => String(groupId)),
+    );
     setShowForm(true);
   };
 
@@ -216,13 +240,18 @@ export default function Batches() {
       setShowForm(false);
       Swal.fire(
         isEditMode ? "Updated" : "Created",
-        isEditMode ? "Batch updated successfully" : "Batch created successfully",
+        isEditMode
+          ? "Batch updated successfully"
+          : "Batch created successfully",
         "success",
       );
     } catch (err) {
       Swal.fire(
         "Error",
-        getApiErrorMessage(err, isEditMode ? "Failed to update batch" : "Failed to create batch"),
+        getApiErrorMessage(
+          err,
+          isEditMode ? "Failed to update batch" : "Failed to create batch",
+        ),
         "error",
       );
     }
@@ -281,7 +310,11 @@ export default function Batches() {
 
       Swal.fire("Updated", "Batch renamed successfully", "success");
     } catch (err) {
-      Swal.fire("Error", getApiErrorMessage(err, "Failed to rename batch"), "error");
+      Swal.fire(
+        "Error",
+        getApiErrorMessage(err, "Failed to rename batch"),
+        "error",
+      );
     }
   };
 
@@ -329,7 +362,9 @@ export default function Batches() {
       );
 
       setBatches((prev) =>
-        prev.filter((existingBatch) => String(existingBatch._id) !== String(batch._id)),
+        prev.filter(
+          (existingBatch) => String(existingBatch._id) !== String(batch._id),
+        ),
       );
 
       if (String(editingBatchId || "") === String(batch._id)) {
@@ -339,18 +374,29 @@ export default function Batches() {
 
       Swal.fire("Deleted", "Batch deleted successfully", "success");
     } catch (err) {
-      Swal.fire("Error", getApiErrorMessage(err, "Failed to delete batch"), "error");
+      Swal.fire(
+        "Error",
+        getApiErrorMessage(err, "Failed to delete batch"),
+        "error",
+      );
     }
   };
 
   if (loading) {
-    return <p className="text-gray-500">Loading batches...</p>;
+    return (
+      <div className="app-page">
+        <div className="app-empty-state">Loading batches...</div>
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-xl font-semibold">Batches</h2>
+    <div className="app-page">
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Batches</h1>
+        </div>
+
         {batches.length > 0 && (
           <button
             onClick={() => {
@@ -362,7 +408,7 @@ export default function Batches() {
 
               openCreateForm();
             }}
-            className="bg-blue-600 text-white px-4 py-2 rounded"
+            className="btn btn-primary"
           >
             {showForm ? "Close" : "+ Create Batch"}
           </button>
@@ -378,14 +424,22 @@ export default function Batches() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search batches..."
-            className="w-full border p-2 rounded"
+            className="app-field"
           />
         </div>
       )}
 
       {(batches.length === 0 || showForm) && (
-        <div className="bg-white border rounded shadow p-4 max-w-3xl space-y-4">
-          <h3 className="font-semibold">{isEditMode ? "Edit Batch" : "Create Batch"}</h3>
+        <section className="app-card app-card-section max-w-4xl space-y-4">
+          <div>
+            <h3 className="text-lg font-semibold text-slate-900">
+              {isEditMode ? "Edit Batch" : "Create Batch"}
+            </h3>
+            <p className="mt-1 text-sm text-slate-500">
+              Select the groups you want to bundle so campaigns can target them
+              together later.
+            </p>
+          </div>
 
           <input
             type="text"
@@ -394,21 +448,26 @@ export default function Batches() {
             value={name}
             onChange={(e) => setName(e.target.value.slice(0, 200))}
             placeholder="Enter batch name"
-            className="w-full border p-2 rounded"
+            className="app-field"
           />
 
           <div className="space-y-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <label className="text-sm font-medium text-gray-700">
-                Select Groups (optional) ({selectedGroupIds.length} selected)
+              <label className="text-sm font-medium text-slate-700">
+                Select Groups (optional)
               </label>
+              <span className="chip chip-neutral">
+                {selectedGroupIds.length} selected
+              </span>
               <button
                 type="button"
                 onClick={toggleSelectAllFilteredGroups}
                 disabled={groupsLoading || filteredGroups.length === 0}
-                className="text-sm border px-3 py-1 rounded disabled:opacity-50"
+                className="btn btn-secondary btn-sm"
               >
-                {allFilteredGroupsSelected ? "Unselect Filtered" : "Select Filtered"}
+                {allFilteredGroupsSelected
+                  ? "Unselect Filtered"
+                  : "Select Filtered"}
               </button>
             </div>
 
@@ -419,31 +478,30 @@ export default function Batches() {
               value={groupSearch}
               onChange={(e) => setGroupSearch(e.target.value)}
               placeholder="Search groups..."
-              className="w-full border p-2 rounded"
+              className="app-field"
             />
 
-            <div className="border rounded max-h-72 overflow-y-auto">
+            <div className="recipient-section">
               {groupsLoading ? (
-                <p className="p-3 text-sm text-gray-500">Loading groups...</p>
+                <p className="p-4 text-sm text-slate-500">Loading groups...</p>
               ) : filteredGroups.length === 0 ? (
-                <p className="p-3 text-sm text-gray-500">
+                <p className="p-4 text-sm text-slate-500">
                   No groups available for this search.
                 </p>
               ) : (
                 filteredGroups.map((group) => (
-                  <label
-                    key={group._id}
-                    className="flex items-center justify-between gap-2 p-3 border-b last:border-b-0 hover:bg-gray-50 cursor-pointer"
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
+                  <label key={group._id} className="recipient-choice">
+                    <div className="recipient-choice-main">
                       <input
                         type="checkbox"
                         checked={selectedGroupSet.has(String(group._id))}
                         onChange={() => toggleGroupSelection(group._id)}
                       />
-                      <span className="font-medium truncate">{group.name}</span>
+                      <span className="truncate font-semibold text-slate-900">
+                        {group.name}
+                      </span>
                     </div>
-                    <span className="text-xs text-gray-500 shrink-0">
+                    <span className="recipient-mini-note shrink-0">
                       {group.contactCount || 0} contacts
                     </span>
                   </label>
@@ -456,7 +514,7 @@ export default function Batches() {
             <button
               onClick={saveBatch}
               disabled={groupsLoading}
-              className="bg-green-600 text-white px-4 py-2 rounded disabled:opacity-50"
+              className="btn btn-success"
             >
               {isEditMode ? "Save Changes" : "Create Batch"}
             </button>
@@ -467,37 +525,39 @@ export default function Batches() {
                   setShowForm(false);
                   resetForm();
                 }}
-                className="border px-4 py-2 rounded"
+                className="btn btn-secondary"
               >
                 Cancel
               </button>
             )}
           </div>
-        </div>
+        </section>
       )}
 
       {filteredBatches.length === 0 && batches.length > 0 && (
-        <p className="text-gray-500 italic">No batches match your search.</p>
+        <div className="app-empty-state">No batches match your search.</div>
       )}
 
       {filteredBatches.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        <div className="app-grid-cards">
           {filteredBatches.map((batch) => (
             <div
               key={batch._id}
-              className="relative bg-white border rounded shadow hover:shadow-md transition"
+              className="relative app-card app-card-section transition-transform duration-200 hover:-translate-y-1"
             >
               <button
                 type="button"
                 onClick={() => navigate(`/dashboard/batches/${batch._id}`)}
                 className="w-full text-left p-4 pr-14"
               >
-                <h4 className="font-semibold text-lg">{batch.name}</h4>
+                <h4 className="text-lg font-semibold text-slate-900">
+                  {batch.name}
+                </h4>
                 <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">
+                  <span className="chip chip-primary">
                     {batch.groupCount || 0} Groups
                   </span>
-                  <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full">
+                  <span className="chip chip-success">
                     {batch.contactCount || 0} Contacts
                   </span>
                 </div>
@@ -513,35 +573,37 @@ export default function Batches() {
                   type="button"
                   onClick={() =>
                     setOpenMenuBatchId((prev) =>
-                      String(prev || "") === String(batch._id) ? null : batch._id,
+                      String(prev || "") === String(batch._id)
+                        ? null
+                        : batch._id,
                     )
                   }
-                  className="p-1.5 border rounded hover:bg-gray-50"
+                  className="btn btn-secondary btn-icon"
                   title="Batch actions"
                 >
                   <MoreVertical size={16} />
                 </button>
 
                 {String(openMenuBatchId || "") === String(batch._id) && (
-                  <div className="absolute right-0 mt-1 w-36 bg-white border rounded shadow-lg z-10 overflow-hidden">
+                  <div className="app-menu">
                     <button
                       type="button"
                       onClick={() => renameBatch(batch)}
-                      className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
+                      className="app-menu-item"
                     >
                       Rename
                     </button>
                     <button
                       type="button"
                       onClick={() => openEditForm(batch)}
-                      className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
+                      className="app-menu-item"
                     >
                       Edit
                     </button>
                     <button
                       type="button"
                       onClick={() => deleteBatch(batch)}
-                      className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+                      className="app-menu-item danger"
                     >
                       Delete
                     </button>

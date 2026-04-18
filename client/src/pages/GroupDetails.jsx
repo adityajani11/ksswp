@@ -22,7 +22,9 @@ import {
 const PAGE_SIZE = 20;
 
 function toDisplayPhone(phone) {
-  const normalizedPhone = String(phone || "").replace(/^\+/, "").trim();
+  const normalizedPhone = String(phone || "")
+    .replace(/^\+/, "")
+    .trim();
   return normalizedPhone ? `+${normalizedPhone}` : "";
 }
 
@@ -245,10 +247,9 @@ export default function GroupDetails() {
   const contactsByPhone = useMemo(
     () =>
       new Map(
-        (Array.isArray(group?.contacts) ? group.contacts : []).map((contact) => [
-          String(contact.phone),
-          contact,
-        ]),
+        (Array.isArray(group?.contacts) ? group.contacts : []).map(
+          (contact) => [String(contact.phone), contact],
+        ),
       ),
     [group?.contacts],
   );
@@ -513,7 +514,9 @@ export default function GroupDetails() {
     }
 
     const selectedContactSummary = summarizeLabels(
-      phonesToDelete.map((contactPhone) => getContactLabelByPhone(contactPhone)),
+      phonesToDelete.map((contactPhone) =>
+        getContactLabelByPhone(contactPhone),
+      ),
     );
 
     const result = await Swal.fire({
@@ -546,9 +549,13 @@ export default function GroupDetails() {
           text: `Removing selected contacts from "${activeGroupName}"...`,
         },
         () =>
-          api.post(`/groups/${id}/contacts/delete`, {
-            phones: phonesToDelete,
-          }, withActionPasswordHeader(loginPassword)),
+          api.post(
+            `/groups/${id}/contacts/delete`,
+            {
+              phones: phonesToDelete,
+            },
+            withActionPasswordHeader(loginPassword),
+          ),
       );
 
       const nextGroup = upsertCachedGroup(res.data?.group) || res.data?.group;
@@ -776,142 +783,141 @@ export default function GroupDetails() {
   };
 
   /* -------------------- UI STATES -------------------- */
-  if (loading) return <p className="text-gray-500">Loading group...</p>;
-  if (!group) return <p className="text-gray-500">Group not found.</p>;
+  if (loading) {
+    return (
+      <div className="app-page">
+        <div className="app-empty-state">Loading group...</div>
+      </div>
+    );
+  }
+  if (!group) {
+    return (
+      <div className="app-page">
+        <div className="app-empty-state">Group not found.</div>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6">
-      {/* GROUP HEADER */}
-      <div className="flex items-center gap-3">
+    <div className="app-page">
+      <div className="page-header">
         {editingGroup ? (
-          <>
+          <div className="flex flex-wrap items-center gap-2">
             <input
               value={groupName}
               onChange={(e) => setGroupName(e.target.value.slice(0, 200))}
-              className="border p-2 rounded"
+              className="app-field w-72 max-w-full"
             />
-            <button
-              onClick={renameGroup}
-              className="bg-green-600 text-white px-3 py-2 rounded"
-            >
+            <button onClick={renameGroup} className="btn btn-success btn-sm">
               Save
             </button>
             <button
               onClick={() => setEditingGroup(false)}
-              className="border px-3 py-2 rounded"
+              className="btn btn-secondary btn-sm"
             >
               Cancel
             </button>
-          </>
+          </div>
         ) : (
-          <>
-            <h2 className="text-2xl font-semibold">{group.name}</h2>
-            <button
-              onClick={() => setEditingGroup(true)}
-              className="text-black bg-gray-300 rounded px-2"
-            >
-              Rename
-            </button>
-          </>
+          <div>
+            <div className="flex flex-wrap items-center gap-3">
+              <h1 className="page-title">{group.name}</h1>
+              <button
+                onClick={() => setEditingGroup(true)}
+                className="btn btn-secondary btn-sm"
+              >
+                Rename
+              </button>
+            </div>
+          </div>
+        )}
+
+        {!editingGroup && (
+          <div className="page-actions">
+            <span className="chip chip-primary">
+              {(group.contacts || []).length} contacts
+            </span>
+            {selectedPhones.length > 0 && (
+              <span className="chip chip-neutral">
+                {selectedPhones.length} selected
+              </span>
+            )}
+          </div>
         )}
       </div>
 
-      {/* EXPORT DATA */}
-      <div className="flex gap-2">
-        <button
-          onClick={exportExcel}
-          className="bg-emerald-600 text-white px-4 py-2 rounded"
-        >
+      <div className="page-actions">
+        <button onClick={exportExcel} className="btn btn-success">
           Export Excel
         </button>
 
-        <button
-          onClick={exportPDF}
-          className="bg-red-600 text-white px-4 py-2 rounded"
-        >
+        <button onClick={exportPDF} className="btn btn-danger">
           Export PDF
         </button>
       </div>
 
-      {/* ADD CONTACT BUTTON */}
       {!showForm && (
-        <button
-          onClick={() => setShowForm(true)}
-          className="bg-blue-600 text-white px-4 py-2 rounded mb-3"
-        >
+        <button onClick={() => setShowForm(true)} className="btn btn-primary">
           + Add Contact
         </button>
       )}
 
-      {/* ADD CONTACT FORM */}
       {showForm && (
-        <div className="bg-white p-4 rounded shadow max-w-md space-y-3">
+        <section className="app-card app-card-section max-w-xl space-y-3">
           <input
             value={name}
             onChange={(e) => setName(e.target.value.slice(0, 200))}
             placeholder="Contact Name"
-            className="w-full border mb-2 p-2 rounded"
+            className="app-field"
           />
 
           <div className="flex gap-2 items-center">
-            <span className="px-3 py-2 border rounded bg-gray-100">+91</span>
+            <span className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-600">
+              +91
+            </span>
             <input
               value={phone}
               onChange={(e) =>
                 setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))
               }
               placeholder="10 digit mobile"
-              className="flex-1 border p-2 rounded"
+              className="app-field flex-1"
             />
           </div>
 
           <div className="flex gap-2">
-            <button
-              onClick={addContact}
-              className="bg-green-600 text-white px-4 py-2 rounded"
-            >
+            <button onClick={addContact} className="btn btn-success">
               Save
             </button>
             <button
               onClick={() => setShowForm(false)}
-              className="border px-4 py-2 rounded"
+              className="btn btn-secondary"
             >
               Cancel
             </button>
           </div>
-        </div>
+        </section>
       )}
 
-      {/* EMPTY STATE */}
       {!hasContacts && !showForm && (
-        <div className="bg-gray-50 border rounded p-4 text-gray-600">
+        <div className="app-empty-state">
           No contacts found in this group. Click "Add Contact" to create one.
         </div>
       )}
 
-      {/* SEARCH */}
       <div className="max-w-md">
         <input
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search by name or number"
-          className="
-      w-full
-      border
-      p-2
-      rounded
-      focus:outline-none
-      focus:ring-2
-      focus:ring-blue-500
-    "
+          className="app-field"
         />
       </div>
 
-      {/* BULK ACTIONS */}
       {hasContacts && (
-        <div className="bg-white border rounded p-2.5 flex flex-wrap items-center justify-between gap-3">
-          <label className="flex items-center gap-2 text-sm text-gray-700">
+        <div className="app-toolbar">
+          <label className="flex items-center gap-2 text-sm text-slate-700">
             <input
               type="checkbox"
               checked={allFilteredSelected}
@@ -927,7 +933,7 @@ export default function GroupDetails() {
           </label>
 
           <div className="flex items-center gap-3">
-            <span className="text-sm text-gray-600">
+            <span className="text-sm text-slate-600">
               {selectedPhones.length} selected
             </span>
             {selectedPhones.length > 0 && (
@@ -940,25 +946,25 @@ export default function GroupDetails() {
                 <button
                   type="button"
                   onClick={() => setShowActionMenu((prev) => !prev)}
-                  className="border rounded p-1.5 hover:bg-gray-100"
+                  className="btn btn-secondary btn-icon"
                   title="Contact actions"
                 >
                   <MoreVertical size={18} />
                 </button>
 
                 {showActionMenu && (
-                  <div className="absolute right-0 mt-2 w-36 bg-white border rounded shadow z-10 overflow-hidden">
+                  <div className="app-menu">
                     <button
                       type="button"
                       onClick={openMoveModal}
-                      className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
+                      className="app-menu-item"
                     >
                       Move
                     </button>
                     <button
                       type="button"
                       onClick={deleteSelectedContacts}
-                      className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+                      className="app-menu-item danger"
                     >
                       Delete
                     </button>
@@ -970,11 +976,10 @@ export default function GroupDetails() {
         </div>
       )}
 
-      {/* CONTACTS LIST */}
       {hasContacts && (
         <ul className="space-y-2">
           {paginatedContacts.map((contact) => (
-            <li key={contact.phone} className="border p-3 rounded">
+            <li key={contact.phone} className="app-card app-card-section">
               {editingContact === contact.phone ? (
                 <div className="flex gap-3 items-start">
                   <input
@@ -989,10 +994,10 @@ export default function GroupDetails() {
                       onChange={(e) =>
                         setEditName(e.target.value.slice(0, 200))
                       }
-                      className="border p-2 rounded w-full mb-2"
+                      className="app-field w-full"
                     />
                     <div className="flex gap-2 items-center">
-                      <span className="px-3 py-2 border rounded bg-gray-100">
+                      <span className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-600">
                         +91
                       </span>
                       <input
@@ -1002,19 +1007,19 @@ export default function GroupDetails() {
                             e.target.value.replace(/\D/g, "").slice(0, 10),
                           )
                         }
-                        className="border p-2 rounded flex-1"
+                        className="app-field flex-1"
                       />
                     </div>
                     <div className="flex gap-2">
                       <button
                         onClick={saveEditContact}
-                        className="bg-green-600 text-white px-3 py-2 rounded"
+                        className="btn btn-success btn-sm"
                       >
                         Save
                       </button>
                       <button
                         onClick={() => setEditingContact(null)}
-                        className="border px-3 py-2 rounded"
+                        className="btn btn-secondary btn-sm"
                       >
                         Cancel
                       </button>
@@ -1031,21 +1036,23 @@ export default function GroupDetails() {
                       className="h-4 w-4"
                     />
                     <div>
-                      <div className="font-medium">{contact.name}</div>
-                      <div className="text-gray-500">+{contact.phone}</div>
+                      <div className="font-medium text-slate-900">
+                        {contact.name}
+                      </div>
+                      <div className="text-slate-500">+{contact.phone}</div>
                     </div>
                   </div>
                   <div className="flex gap-3 shrink-0">
                     <button
                       onClick={() => startEditContact(contact)}
-                      className="bg-blue-600 rounded px-2 text-white"
+                      className="btn btn-primary btn-sm"
                     >
                       Edit
                     </button>
 
                     <button
                       onClick={() => deleteContact(contact)}
-                      className="bg-red-500 rounded px-2 text-white"
+                      className="btn btn-danger btn-sm"
                     >
                       Delete
                     </button>
@@ -1058,7 +1065,7 @@ export default function GroupDetails() {
       )}
 
       {filteredContacts.length === 0 && hasContacts && (
-        <p className="text-gray-500 italic">No contacts match your search.</p>
+        <div className="app-empty-state">No contacts match your search.</div>
       )}
 
       {totalPages > 1 && (
@@ -1066,19 +1073,19 @@ export default function GroupDetails() {
           <button
             disabled={safeCurrentPage === 1}
             onClick={() => setCurrentPage((page) => page - 1)}
-            className="border px-3 py-1 rounded disabled:opacity-50"
+            className="btn btn-secondary btn-sm"
           >
             Prev
           </button>
 
-          <span className="text-sm text-gray-600">
+          <span className="text-sm text-slate-600">
             Page {safeCurrentPage} of {totalPages}
           </span>
 
           <button
             disabled={safeCurrentPage === totalPages}
             onClick={() => setCurrentPage((page) => page + 1)}
-            className="border px-3 py-1 rounded disabled:opacity-50"
+            className="btn btn-secondary btn-sm"
           >
             Next
           </button>
@@ -1086,63 +1093,67 @@ export default function GroupDetails() {
       )}
 
       {showMoveModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
-          <div className="bg-white rounded-xl shadow-lg w-full max-w-xl p-4 space-y-3">
-            <h3 className="text-lg font-semibold">
-              Move {selectedPhones.length} Contact
-              {selectedPhones.length === 1 ? "" : "s"}
-            </h3>
-
-            <input
-              type="text"
-              value={targetGroupSearch}
-              onChange={(e) => setTargetGroupSearch(e.target.value)}
-              placeholder="Search target group..."
-              className="w-full border p-2 rounded"
-            />
-
-            <div className="border rounded max-h-72 overflow-y-auto">
-              {moveGroupsLoading ? (
-                <p className="p-3 text-sm text-gray-500">Loading groups...</p>
-              ) : filteredMoveGroups.length === 0 ? (
-                <p className="p-3 text-sm text-gray-500">
-                  No groups match your search.
-                </p>
-              ) : (
-                filteredMoveGroups.map((targetGroup) => (
-                  <label
-                    key={targetGroup._id}
-                    className="flex items-center justify-between gap-2 p-3 border-b last:border-b-0 hover:bg-gray-50 cursor-pointer"
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <input
-                        type="radio"
-                        name="targetGroup"
-                        checked={
-                          String(selectedTargetGroupId) ===
-                          String(targetGroup._id)
-                        }
-                        onChange={() =>
-                          setSelectedTargetGroupId(targetGroup._id)
-                        }
-                      />
-                      <span className="font-medium truncate">
-                        {targetGroup.name}
-                      </span>
-                    </div>
-                    <span className="text-xs text-gray-500 shrink-0">
-                      {targetGroup.contactCount || 0} contacts
-                    </span>
-                  </label>
-                ))
-              )}
+        <div className="app-modal-shell">
+          <div className="app-overlay" onClick={closeMoveModal} />
+          <div className="app-modal">
+            <div className="app-modal-header">
+              <h3 className="app-modal-title">
+                Move {selectedPhones.length} Contact
+                {selectedPhones.length === 1 ? "" : "s"}
+              </h3>
             </div>
 
-            <div className="flex justify-end gap-2 pt-1">
+            <div className="app-modal-body">
+              <input
+                type="text"
+                value={targetGroupSearch}
+                onChange={(e) => setTargetGroupSearch(e.target.value)}
+                placeholder="Search target group..."
+                className="app-field"
+              />
+
+              <div className="recipient-section">
+                {moveGroupsLoading ? (
+                  <p className="p-4 text-sm text-slate-500">
+                    Loading groups...
+                  </p>
+                ) : filteredMoveGroups.length === 0 ? (
+                  <p className="p-4 text-sm text-slate-500">
+                    No groups match your search.
+                  </p>
+                ) : (
+                  filteredMoveGroups.map((targetGroup) => (
+                    <label key={targetGroup._id} className="recipient-choice">
+                      <div className="recipient-choice-main">
+                        <input
+                          type="radio"
+                          name="targetGroup"
+                          checked={
+                            String(selectedTargetGroupId) ===
+                            String(targetGroup._id)
+                          }
+                          onChange={() =>
+                            setSelectedTargetGroupId(targetGroup._id)
+                          }
+                        />
+                        <span className="truncate font-semibold text-slate-900">
+                          {targetGroup.name}
+                        </span>
+                      </div>
+                      <span className="recipient-mini-note shrink-0">
+                        {targetGroup.contactCount || 0} contacts
+                      </span>
+                    </label>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <div className="app-modal-footer">
               <button
                 type="button"
                 onClick={closeMoveModal}
-                className="border px-4 py-2 rounded"
+                className="btn btn-secondary"
               >
                 Cancel
               </button>
@@ -1150,7 +1161,7 @@ export default function GroupDetails() {
                 type="button"
                 disabled={!selectedTargetGroupId || moveGroupsLoading}
                 onClick={moveSelectedContacts}
-                className="bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-50"
+                className="btn btn-primary"
               >
                 Move Selected
               </button>

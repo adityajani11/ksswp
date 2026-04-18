@@ -20,7 +20,9 @@ function getSearchedContactSelectionId(contact) {
 }
 
 function toDisplayPhone(phone) {
-  const normalizedPhone = String(phone || "").replace(/^\+/, "").trim();
+  const normalizedPhone = String(phone || "")
+    .replace(/^\+/, "")
+    .trim();
   return normalizedPhone ? `+${normalizedPhone}` : "";
 }
 
@@ -113,7 +115,9 @@ export default function Groups() {
       setSearchingContacts(true);
 
       try {
-        const summaryMatches = await fetchGroupSummaries({ search: summarySearch });
+        const summaryMatches = await fetchGroupSummaries({
+          search: summarySearch,
+        });
 
         if (cancelled || !summaryMatches.length) {
           if (!cancelled) {
@@ -136,7 +140,9 @@ export default function Groups() {
               const contactName = String(contact.name || "").toLowerCase();
               const contactPhone = String(contact.phone || "");
               const matchesName = contactName.includes(query);
-              const matchesPhone = phoneQuery ? contactPhone.includes(phoneQuery) : false;
+              const matchesPhone = phoneQuery
+                ? contactPhone.includes(phoneQuery)
+                : false;
               return matchesName || matchesPhone;
             })
             .map((contact) => ({
@@ -359,7 +365,9 @@ export default function Groups() {
       return acc;
     }, {});
 
-    const targetGroupName = String(selectedTargetGroup?.name || "selected group");
+    const targetGroupName = String(
+      selectedTargetGroup?.name || "selected group",
+    );
     const result = await Swal.fire({
       title: `Move ${selectedContacts.length} contact(s)?`,
       text: selectedContactSummary
@@ -391,14 +399,19 @@ export default function Groups() {
             contactsBySourceGroup,
           )) {
             const phones = contacts.map((contact) => String(contact.phone));
-            const res = await api.post(`/groups/${sourceGroupId}/contacts/move`, {
-              targetGroupId: selectedTargetGroupId,
-              phones,
-            });
+            const res = await api.post(
+              `/groups/${sourceGroupId}/contacts/move`,
+              {
+                targetGroupId: selectedTargetGroupId,
+                phones,
+              },
+            );
 
             const payload = res.data || {};
             const movedPhones = Array.isArray(payload.movedPhones)
-              ? payload.movedPhones.map((phone) => String(phone || "")).filter(Boolean)
+              ? payload.movedPhones
+                  .map((phone) => String(phone || ""))
+                  .filter(Boolean)
               : [];
             const movedInCall = Math.max(
               0,
@@ -546,81 +559,84 @@ export default function Groups() {
   };
 
   if (loading) {
-    return <p className="text-gray-500">Loading groups...</p>;
+    return (
+      <div className="app-page">
+        <div className="app-empty-state">Loading groups...</div>
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <h2 className="text-xl font-semibold">Groups</h2>
+    <div className="app-page">
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Groups</h1>
+        </div>
 
         {groups.length > 0 && (
           <button
             onClick={() => setShowForm(!showForm)}
-            className="bg-blue-600 text-white px-4 py-2 rounded"
+            className="btn btn-primary"
           >
             {showForm ? "Close" : "+ Create Group"}
           </button>
         )}
       </div>
 
-      {/* Search */}
       {groups.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-w-3xl">
+        <div className="app-search-grid max-w-4xl">
           <input
             type="text"
             placeholder="Search groups..."
             value={groupSearch}
             onChange={(e) => setGroupSearch(e.target.value)}
-            className="w-full border p-2 rounded"
+            className="app-field"
           />
           <input
             type="text"
             placeholder="Search contact by name or number..."
             value={contactSearch}
             onChange={(e) => setContactSearch(e.target.value)}
-            className="w-full border p-2 rounded"
+            className="app-field"
           />
         </div>
       )}
 
       {String(contactSearch || "").trim() && (
-        <div className="space-y-2">
+        <section className="space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-sm font-semibold text-gray-700">
+            <h3 className="text-sm font-semibold text-slate-700">
               Contact Search Results
             </h3>
 
             {selectedContacts.length > 0 && (
               <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-600">
+                <span className="chip chip-neutral">
                   {selectedContacts.length} selected
                 </span>
                 <button
                   type="button"
                   onClick={openMoveModalForSelected}
-                  className="bg-blue-600 text-white px-3 py-1.5 rounded text-xs font-semibold"
+                  className="btn btn-primary btn-sm"
                 >
-                  MOVE
+                  Move
                 </button>
               </div>
             )}
           </div>
 
-          <div className="bg-white rounded shadow border overflow-hidden">
+          <div className="app-list">
             {searchingContacts ? (
-              <p className="p-3 text-sm text-gray-500">Searching contacts...</p>
+              <p className="p-4 text-sm text-slate-500">
+                Searching contacts...
+              </p>
             ) : matchingContacts.length === 0 ? (
-              <p className="p-3 text-sm text-gray-500">
+              <p className="p-4 text-sm text-slate-500">
                 No contacts match your search.
               </p>
             ) : (
               matchingContacts.map((contact) => (
-                <div
-                  key={contact.key}
-                  className="flex items-center gap-3 p-3 border-b last:border-b-0 hover:bg-gray-50"
-                >
+                <div key={contact.key} className="app-list-item">
                   <input
                     type="checkbox"
                     checked={selectedContactSet.has(
@@ -632,13 +648,17 @@ export default function Groups() {
 
                   <button
                     type="button"
-                    onClick={() => navigate(`/dashboard/groups/${contact.groupId}`)}
+                    onClick={() =>
+                      navigate(`/dashboard/groups/${contact.groupId}`)
+                    }
                     className="flex-1 text-left min-w-0"
                   >
-                    <div className="font-medium text-sm truncate">{contact.name}</div>
-                    <div className="text-sm text-gray-600 flex flex-wrap items-center gap-2 mt-0.5">
+                    <div className="truncate text-sm font-semibold text-slate-900">
+                      {contact.name}
+                    </div>
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-slate-500">
                       <span>+{contact.phone}</span>
-                      <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
+                      <span className="chip chip-primary">
                         {contact.groupName}
                       </span>
                     </div>
@@ -647,139 +667,158 @@ export default function Groups() {
               ))
             )}
           </div>
-        </div>
+        </section>
       )}
 
-      {/* Create Group Form */}
       {(groups.length === 0 || showForm) && (
-        <div className="bg-white p-4 rounded shadow max-w-md">
-          <h3 className="font-semibold mb-2">Create Group</h3>
+        <section className="app-card app-card-section max-w-xl space-y-4">
+          <div>
+            <h3 className="text-lg font-semibold text-slate-900">
+              Create Group
+            </h3>
+            <p className="mt-1 text-sm text-slate-500">
+              Create a clear group name so it is easy to reuse in campaigns.
+            </p>
+          </div>
 
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Enter group name"
-            className="w-full border p-2 rounded mb-3"
+            className="app-field"
           />
 
-          <button
-            onClick={createGroup}
-            className="bg-green-600 text-white px-4 py-2 rounded"
-          >
-            Create
-          </button>
-        </div>
+          <div className="flex flex-wrap gap-2">
+            <button onClick={createGroup} className="btn btn-success">
+              Create
+            </button>
+            {showForm && groups.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowForm(false)}
+                className="btn btn-secondary"
+              >
+                Cancel
+              </button>
+            )}
+          </div>
+        </section>
       )}
 
-      {/* No Groups */}
       {filteredGroups.length === 0 && groups.length > 0 && (
-        <p className="text-gray-500 italic">No groups match your search.</p>
+        <div className="app-empty-state">No groups match your search.</div>
       )}
 
-      {/* Groups Grid */}
       {groups.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="app-grid-cards">
           {filteredGroups.map((group) => (
             <div
               key={group._id}
               onClick={() => navigate(`/dashboard/groups/${group._id}`)}
-              className="
-          cursor-pointer
-          bg-white
-          p-4
-          rounded
-          shadow
-          hover:shadow-md
-          transition
-          relative
-        "
+              className="relative cursor-pointer app-card app-card-section transition-transform duration-200 hover:-translate-y-1"
             >
-              {/* Delete Button */}
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   deleteGroup(group);
                 }}
-                className="absolute top-3 right-5 bg-red-500 rounded px-2 text-white"
+                className="btn btn-danger btn-sm absolute right-4 top-4"
                 title="Delete group"
               >
                 Delete
               </button>
 
-              <h4 className="font-semibold text-lg">{group.name}</h4>
-              <p className="text-sm text-gray-500">
-                {group.contactCount || 0} contacts
-              </p>
+              <div className="space-y-3 pr-24">
+                <h4 className="text-lg font-semibold text-slate-900">
+                  {group.name}
+                </h4>
+                <span className="chip chip-primary">
+                  {group.contactCount || 0} contacts
+                </span>
+              </div>
             </div>
           ))}
         </div>
       )}
 
       {showMoveModal && selectedContacts.length > 0 && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
-          <div className="bg-white rounded-xl shadow-lg w-full max-w-xl p-4 space-y-3">
-            <h3 className="text-lg font-semibold">Move Selected Contacts</h3>
-
-            <div className="rounded border bg-gray-50 px-3 py-2 text-sm text-gray-700">
-              <p className="font-medium">
-                {selectedContacts.length} contact
-                {selectedContacts.length === 1 ? "" : "s"} selected
-              </p>
-              <p className="text-xs text-gray-500 mt-1">
-                Choose a target group for selected contact numbers.
-              </p>
-            </div>
-
-            <input
-              type="text"
-              value={targetGroupSearch}
-              onChange={(e) => setTargetGroupSearch(e.target.value)}
-              placeholder="Search target group..."
-              className="w-full border p-2 rounded"
-            />
-
-            <div className="border rounded max-h-72 overflow-y-auto">
-              {moveGroupsLoading ? (
-                <p className="p-3 text-sm text-gray-500">Loading groups...</p>
-              ) : filteredMoveGroups.length === 0 ? (
-                <p className="p-3 text-sm text-gray-500">
-                  No groups match your search.
+        <div className="app-modal-shell">
+          <div className="app-overlay" onClick={closeMoveModal} />
+          <div className="app-modal">
+            <div className="app-modal-header">
+              <div>
+                <h3 className="app-modal-title">Move Selected Contacts</h3>
+                <p className="app-modal-subtitle">
+                  Choose a destination group for the selected contacts.
                 </p>
-              ) : (
-                filteredMoveGroups.map((targetGroup) => (
-                  <label
-                    key={targetGroup._id}
-                    className="flex items-center justify-between gap-2 p-3 border-b last:border-b-0 hover:bg-gray-50 cursor-pointer"
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <input
-                        type="radio"
-                        name="targetGroup"
-                        checked={
-                          String(selectedTargetGroupId) ===
-                          String(targetGroup._id)
-                        }
-                        onChange={() =>
-                          setSelectedTargetGroupId(String(targetGroup._id))
-                        }
-                      />
-                      <span className="font-medium truncate">
-                        {targetGroup.name}
-                      </span>
-                    </div>
-                    <span className="text-xs text-gray-500 shrink-0">
-                      {targetGroup.contactCount || 0} contacts
-                    </span>
-                  </label>
-                ))
-              )}
+              </div>
             </div>
 
-            <div className="flex justify-end gap-2 pt-1">
+            <div className="app-modal-body">
+              <div className="app-inline-note">
+                <p className="font-medium">
+                  {selectedContacts.length} contact
+                  {selectedContacts.length === 1 ? "" : "s"} selected
+                </p>
+                <p className="mt-1 text-xs text-slate-500">
+                  Choose a target group for selected contact numbers.
+                </p>
+              </div>
+
+              <input
+                type="text"
+                value={targetGroupSearch}
+                onChange={(e) => setTargetGroupSearch(e.target.value)}
+                placeholder="Search target group..."
+                className="app-field"
+              />
+
+              <div className="recipient-section">
+                <div className="recipient-scroll">
+                  {moveGroupsLoading ? (
+                    <p className="p-4 text-sm text-slate-500">
+                      Loading groups...
+                    </p>
+                  ) : filteredMoveGroups.length === 0 ? (
+                    <p className="p-4 text-sm text-slate-500">
+                      No groups match your search.
+                    </p>
+                  ) : (
+                    filteredMoveGroups.map((targetGroup) => (
+                      <label key={targetGroup._id} className="recipient-choice">
+                        <div className="recipient-choice-main">
+                          <input
+                            type="radio"
+                            name="targetGroup"
+                            checked={
+                              String(selectedTargetGroupId) ===
+                              String(targetGroup._id)
+                            }
+                            onChange={() =>
+                              setSelectedTargetGroupId(String(targetGroup._id))
+                            }
+                          />
+                          <div className="recipient-choice-copy">
+                            <div className="truncate text-sm font-semibold text-slate-900">
+                              {targetGroup.name}
+                            </div>
+                          </div>
+                        </div>
+                        <span className="recipient-mini-note shrink-0">
+                          {targetGroup.contactCount || 0} contacts
+                        </span>
+                      </label>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="app-modal-footer">
               <button
                 type="button"
                 onClick={closeMoveModal}
-                className="border px-4 py-2 rounded"
+                className="btn btn-secondary"
               >
                 Cancel
               </button>
@@ -787,9 +826,9 @@ export default function Groups() {
                 type="button"
                 disabled={!selectedTargetGroupId || moveGroupsLoading}
                 onClick={moveSelectedSearchedContacts}
-                className="bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-50"
+                className="btn btn-primary"
               >
-                MOVE
+                Move
               </button>
             </div>
           </div>

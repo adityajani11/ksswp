@@ -9,7 +9,11 @@ import {
   withActionPasswordHeader,
 } from "../utils/security";
 
-const FINAL_STATUSES = new Set(["completed", "completed_with_failures", "failed"]);
+const FINAL_STATUSES = new Set([
+  "completed",
+  "completed_with_failures",
+  "failed",
+]);
 
 function fmtDate(dateValue) {
   if (!dateValue) return "-";
@@ -46,11 +50,11 @@ function fmtDate(dateValue) {
 
 function statusClass(status) {
   const s = String(status || "").toLowerCase();
-  if (s === "completed") return "bg-green-100 text-green-700";
-  if (s === "completed_with_failures") return "bg-amber-100 text-amber-700";
-  if (s === "failed") return "bg-red-100 text-red-700";
-  if (s === "processing") return "bg-blue-100 text-blue-700";
-  return "bg-gray-100 text-gray-700";
+  if (s === "completed") return "chip chip-success";
+  if (s === "completed_with_failures") return "chip chip-warning";
+  if (s === "failed") return "chip chip-danger";
+  if (s === "processing") return "chip chip-primary";
+  return "chip chip-neutral";
 }
 
 export default function MessageHistory() {
@@ -67,7 +71,10 @@ export default function MessageHistory() {
     [campaigns, selectedCampaignId],
   );
 
-  const fetchHistory = async ({ preserveSelection = true, silent = false } = {}) => {
+  const fetchHistory = async ({
+    preserveSelection = true,
+    silent = false,
+  } = {}) => {
     try {
       if (!silent) {
         setLoading(true);
@@ -87,7 +94,11 @@ export default function MessageHistory() {
       });
     } catch (err) {
       if (!silent) {
-        Swal.fire("Error", getApiErrorMessage(err, "Failed to load message history"), "error");
+        Swal.fire(
+          "Error",
+          getApiErrorMessage(err, "Failed to load message history"),
+          "error",
+        );
       }
     } finally {
       if (!silent) {
@@ -118,7 +129,11 @@ export default function MessageHistory() {
       });
     } catch (err) {
       if (!silent) {
-        Swal.fire("Error", getApiErrorMessage(err, "Failed to load campaign details"), "error");
+        Swal.fire(
+          "Error",
+          getApiErrorMessage(err, "Failed to load campaign details"),
+          "error",
+        );
       }
     } finally {
       if (!silent) {
@@ -127,7 +142,10 @@ export default function MessageHistory() {
     }
   };
 
-  const refreshCampaignSummary = async (campaignId, { silent = false } = {}) => {
+  const refreshCampaignSummary = async (
+    campaignId,
+    { silent = false } = {},
+  ) => {
     if (!campaignId) return;
 
     try {
@@ -141,7 +159,9 @@ export default function MessageHistory() {
       });
 
       setCampaigns((prev) =>
-        prev.map((item) => (item._id === campaignId ? { ...item, ...campaign } : item)),
+        prev.map((item) =>
+          item._id === campaignId ? { ...item, ...campaign } : item,
+        ),
       );
     } catch (err) {
       if (!silent) {
@@ -285,23 +305,25 @@ export default function MessageHistory() {
   const visibleRecipients = activeTab === "sent" ? sentList : unsentList;
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold">Message History</h2>
-        <div className="flex gap-2">
+    <div className="app-page app-page-wide">
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Message History</h1>
+        </div>
+        <div className="page-actions">
           <button
             onClick={() => {
               fetchHistory();
               if (selectedCampaignId) fetchDetails(selectedCampaignId);
             }}
-            className="px-3 py-2 text-sm bg-blue-600 text-white rounded"
+            className="btn btn-primary btn-sm"
           >
             Refresh
           </button>
           <button
             onClick={clearPreviousHistory}
             disabled={deleting}
-            className="px-3 py-2 text-sm bg-red-600 text-white rounded disabled:opacity-50"
+            className="btn btn-danger btn-sm"
           >
             Clear History
           </button>
@@ -309,13 +331,15 @@ export default function MessageHistory() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="bg-white border rounded-xl overflow-hidden">
-          <div className="px-4 py-3 border-b font-medium">Campaigns</div>
+        <div className="app-card overflow-hidden">
+          <div className="border-b border-slate-200 px-4 py-3 font-medium">
+            Campaigns
+          </div>
           <div className="max-h-[70vh] overflow-y-auto">
             {loading ? (
-              <p className="p-4 text-gray-500">Loading history...</p>
+              <p className="p-4 text-slate-500">Loading history...</p>
             ) : campaigns.length === 0 ? (
-              <p className="p-4 text-gray-500">No campaign history found.</p>
+              <p className="p-4 text-slate-500">No campaign history found.</p>
             ) : (
               campaigns.map((item) => {
                 const progress = calculateCampaignProgress(item);
@@ -325,25 +349,25 @@ export default function MessageHistory() {
                     key={item._id}
                     type="button"
                     onClick={() => setSelectedCampaignId(item._id)}
-                    className={`w-full text-left px-4 py-3 border-b hover:bg-gray-50 ${
-                      isActive ? "bg-blue-50" : ""
+                    className={`w-full border-b border-slate-200 px-4 py-3 text-left transition-colors hover:bg-slate-50 ${
+                      isActive ? "bg-blue-50/80" : ""
                     }`}
                   >
                     <div className="flex items-center justify-between">
-                      <span className="font-medium capitalize">{item.type}</span>
-                      <span
-                        className={`text-xs px-2 py-0.5 rounded ${statusClass(item.status)}`}
-                      >
+                      <span className="font-medium capitalize text-slate-900">
+                        {item.type}
+                      </span>
+                      <span className={statusClass(item.status)}>
                         {String(item.status || "").replaceAll("_", " ")}
                       </span>
                     </div>
-                    <p className="text-sm text-gray-600 line-clamp-1 mt-1">
+                    <p className="mt-1 line-clamp-1 text-sm text-slate-600">
                       {item.text}
                     </p>
-                    <div className="text-xs text-gray-500 mt-1">
+                    <div className="mt-1 text-xs text-slate-500">
                       Created: {fmtDate(item.createdAt)}
                     </div>
-                    <div className="text-xs text-gray-600 mt-1">
+                    <div className="mt-1 text-xs text-slate-600">
                       Sent: {progress.sent} | Unsent:{" "}
                       {progress.failed + progress.pending}
                     </div>
@@ -354,15 +378,19 @@ export default function MessageHistory() {
           </div>
         </div>
 
-        <div className="bg-white border rounded-xl overflow-hidden">
-          <div className="px-4 py-3 border-b font-medium">Acknowledgement List</div>
+        <div className="app-card overflow-hidden">
+          <div className="border-b border-slate-200 px-4 py-3 font-medium">
+            Acknowledgement List
+          </div>
 
           {!selectedCampaignId ? (
-            <p className="p-4 text-gray-500">Select a campaign to view details.</p>
+            <p className="p-4 text-slate-500">
+              Select a campaign to view details.
+            </p>
           ) : detailsLoading && !details ? (
-            <p className="p-4 text-gray-500">Loading campaign details...</p>
+            <p className="p-4 text-slate-500">Loading campaign details...</p>
           ) : !details?.campaign ? (
-            <p className="p-4 text-gray-500">Campaign details unavailable.</p>
+            <p className="p-4 text-slate-500">Campaign details unavailable.</p>
           ) : (
             <div className="p-4 space-y-4">
               <div className="space-y-2">
@@ -370,24 +398,22 @@ export default function MessageHistory() {
                   <span className="font-medium capitalize">
                     {details.campaign.type} campaign
                   </span>
-                  <span
-                    className={`text-xs px-2 py-0.5 rounded ${statusClass(details.campaign.status)}`}
-                  >
+                  <span className={statusClass(details.campaign.status)}>
                     {String(details.campaign.status || "").replaceAll("_", " ")}
                   </span>
                 </div>
-                <div className="h-2 bg-gray-200 rounded overflow-hidden">
+                <div className="h-2 overflow-hidden rounded-full bg-slate-200">
                   <div
                     className="h-full bg-blue-600 transition-all"
                     style={{ width: `${currentProgress.percent}%` }}
                   />
                 </div>
-                <div className="text-xs text-gray-600">
+                <div className="text-xs text-slate-600">
                   {currentProgress.percent}% completed | Sent:{" "}
                   {currentProgress.sent} | Unsent:{" "}
                   {currentProgress.failed + currentProgress.pending}
                 </div>
-                <div className="text-xs text-gray-500">
+                <div className="text-xs text-slate-500">
                   Sent time start: {fmtDate(details.campaign.startedAt)} | End:{" "}
                   {fmtDate(details.campaign.completedAt)}
                 </div>
@@ -397,10 +423,8 @@ export default function MessageHistory() {
                 <button
                   type="button"
                   onClick={() => setActiveTab("sent")}
-                  className={`px-3 py-1 text-sm rounded ${
-                    activeTab === "sent"
-                      ? "bg-green-600 text-white"
-                      : "bg-gray-100 text-gray-700"
+                  className={`btn btn-sm ${
+                    activeTab === "sent" ? "btn-success" : "btn-secondary"
                   }`}
                 >
                   Sent ({sentList.length})
@@ -408,10 +432,8 @@ export default function MessageHistory() {
                 <button
                   type="button"
                   onClick={() => setActiveTab("unsent")}
-                  className={`px-3 py-1 text-sm rounded ${
-                    activeTab === "unsent"
-                      ? "bg-red-600 text-white"
-                      : "bg-gray-100 text-gray-700"
+                  className={`btn btn-sm ${
+                    activeTab === "unsent" ? "btn-danger" : "btn-secondary"
                   }`}
                 >
                   Unsent ({unsentList.length})
@@ -420,43 +442,43 @@ export default function MessageHistory() {
                   type="button"
                   onClick={deleteSelectedHistory}
                   disabled={deleting}
-                  className="px-3 py-1 text-sm rounded bg-red-600 text-white disabled:opacity-50"
+                  className="btn btn-danger btn-sm"
                 >
                   Delete This
                 </button>
               </div>
 
-              <div className="max-h-[45vh] overflow-y-auto border rounded">
+              <div className="app-list max-h-[45vh] overflow-y-auto">
                 {visibleRecipients.length === 0 ? (
-                  <p className="p-3 text-sm text-gray-500">No entries.</p>
+                  <p className="p-4 text-sm text-slate-500">No entries.</p>
                 ) : (
                   visibleRecipients.map((r) => (
-                    <div key={r.to} className="p-3 border-b text-sm">
+                    <div key={r.to} className="app-list-item text-sm">
                       <div className="flex items-center justify-between">
-                        <span className="font-medium">
+                        <span className="font-medium text-slate-900">
                           {r.name ? `${r.name} (+${r.to})` : `+${r.to}`}
                         </span>
                         <span
-                          className={`text-xs px-2 py-0.5 rounded ${
+                          className={
                             r.status === "sent"
-                              ? "bg-green-100 text-green-700"
-                              : "bg-red-100 text-red-700"
-                          }`}
+                              ? "chip chip-success"
+                              : "chip chip-danger"
+                          }
                         >
                           {r.status}
                         </span>
                       </div>
-                      <div className="text-xs text-gray-600 mt-1">
+                      <div className="mt-1 text-xs text-slate-600">
                         Sent At: {fmtDate(r.sentAt)}
                       </div>
-                      <div className="text-xs text-gray-600">
+                      <div className="text-xs text-slate-600">
                         Last Tried: {fmtDate(r.lastTriedAt)}
                       </div>
-                      <div className="text-xs text-gray-600">
+                      <div className="text-xs text-slate-600">
                         Delivery: {r.deliveryStatus || "pending"}
                       </div>
                       {r.lastError ? (
-                        <div className="text-xs text-red-600 mt-1">
+                        <div className="mt-1 text-xs text-red-600">
                           Error: {r.lastError}
                         </div>
                       ) : null}
@@ -470,7 +492,7 @@ export default function MessageHistory() {
       </div>
 
       {selectedCampaign?.lastError ? (
-        <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded p-3">
+        <div className="app-inline-note app-inline-note-danger text-sm">
           Last error: {selectedCampaign.lastError}
         </div>
       ) : null}

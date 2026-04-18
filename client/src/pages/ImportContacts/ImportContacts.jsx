@@ -2,7 +2,16 @@ import React, { useState, useEffect } from "react";
 import api, { getApiErrorMessage } from "../../utils/api";
 import { runWithSwalLoader } from "../../utils/swalLoading";
 import Swal from "sweetalert2";
-import { FileUp, Info, AlertTriangle, CheckCircle, Clock, Trash2, Trash, RefreshCw } from "lucide-react";
+import {
+  FileUp,
+  Info,
+  AlertTriangle,
+  CheckCircle,
+  Clock,
+  Trash2,
+  Trash,
+  RefreshCw,
+} from "lucide-react";
 
 export default function ImportContacts() {
   const [history, setHistory] = useState([]);
@@ -15,14 +24,14 @@ export default function ImportContacts() {
     const day = String(d.getDate()).padStart(2, "0");
     const month = String(d.getMonth() + 1).padStart(2, "0");
     const year = d.getFullYear();
-    
+
     let hours = d.getHours();
     const minutes = String(d.getMinutes()).padStart(2, "0");
-    const ampm = hours >= 12 ? 'PM' : 'AM';
+    const ampm = hours >= 12 ? "PM" : "AM";
     hours = hours % 12;
     hours = hours ? hours : 12; // the hour '0' should be '12'
     const strHours = String(hours).padStart(2, "0");
-    
+
     return `${day}/${month}/${year} ${strHours}:${minutes} ${ampm}`;
   };
 
@@ -81,14 +90,20 @@ export default function ImportContacts() {
     const htmlContainer = Swal.getHtmlContainer();
     if (!htmlContainer) return;
 
-    const elapsedSeconds = Math.max(0, Math.floor((Date.now() - startTime) / 1000));
+    const elapsedSeconds = Math.max(
+      0,
+      Math.floor((Date.now() - startTime) / 1000),
+    );
     const total = Math.max(0, Number(job?.total || 0));
     const processed = Math.max(0, Number(job?.processed || 0));
     const imported = Math.max(0, Number(job?.imported || 0));
     const skipped = Math.max(0, Number(job?.skipped || 0));
     const progress = Math.max(
       0,
-      Math.min(100, Number.isFinite(Number(job?.progress)) ? Number(job?.progress) : 0),
+      Math.min(
+        100,
+        Number.isFinite(Number(job?.progress)) ? Number(job?.progress) : 0,
+      ),
     );
 
     const timerEl = htmlContainer.querySelector("[data-prog-timer]");
@@ -116,7 +131,7 @@ export default function ImportContacts() {
       const res = await api.get("/import/history", { signal });
       setHistory(res.data);
     } catch (err) {
-      if (err.name !== 'CanceledError' && err.name !== 'AbortError') {
+      if (err.name !== "CanceledError" && err.name !== "AbortError") {
         console.error("History fetch error:", err);
       }
     } finally {
@@ -150,16 +165,20 @@ export default function ImportContacts() {
     if (result.isConfirmed) {
       try {
         await api.delete(`/import/history/${id}`);
-        setHistory(prev => prev.filter(h => h._id !== id));
+        setHistory((prev) => prev.filter((h) => h._id !== id));
         Swal.fire({
           icon: "success",
           title: "Deleted",
           text: "Record removed successfully.",
           timer: 1500,
-          showConfirmButton: false
+          showConfirmButton: false,
         });
       } catch (err) {
-        Swal.fire("Error", getApiErrorMessage(err, "Failed to delete record"), "error");
+        Swal.fire(
+          "Error",
+          getApiErrorMessage(err, "Failed to delete record"),
+          "error",
+        );
       }
     }
   };
@@ -184,10 +203,14 @@ export default function ImportContacts() {
           title: "Cleared!",
           text: "All history records have been removed.",
           timer: 1500,
-          showConfirmButton: false
+          showConfirmButton: false,
         });
       } catch (err) {
-        Swal.fire("Error", getApiErrorMessage(err, "Failed to clear history"), "error");
+        Swal.fire(
+          "Error",
+          getApiErrorMessage(err, "Failed to clear history"),
+          "error",
+        );
       }
     }
   };
@@ -211,9 +234,15 @@ export default function ImportContacts() {
   };
 
   const downloadSkipDetailsExcel = async (historyEntry) => {
-    const details = Array.isArray(historyEntry?.skipDetails) ? historyEntry.skipDetails : [];
+    const details = Array.isArray(historyEntry?.skipDetails)
+      ? historyEntry.skipDetails
+      : [];
     if (!details.length) {
-      Swal.fire("No data", "No skipped details available to export.", "warning");
+      Swal.fire(
+        "No data",
+        "No skipped details available to export.",
+        "warning",
+      );
       return;
     }
 
@@ -248,12 +277,22 @@ export default function ImportContacts() {
           ];
 
           XLSX.utils.book_append_sheet(workbook, worksheet, "Skipped Details");
-          const fileBase = sanitizeFilePart(historyEntry?.fileName, "Import_History");
-          XLSX.writeFile(workbook, `${fileBase}_Skipped_${getExportTimestamp()}.xlsx`);
+          const fileBase = sanitizeFilePart(
+            historyEntry?.fileName,
+            "Import_History",
+          );
+          XLSX.writeFile(
+            workbook,
+            `${fileBase}_Skipped_${getExportTimestamp()}.xlsx`,
+          );
         },
       );
     } catch (err) {
-      Swal.fire("Error", getApiErrorMessage(err, "Failed to export selected history"), "error");
+      Swal.fire(
+        "Error",
+        getApiErrorMessage(err, "Failed to export selected history"),
+        "error",
+      );
     }
   };
 
@@ -283,7 +322,11 @@ export default function ImportContacts() {
     const fileName = file.name;
     const extension = fileName.split(".").pop().toLowerCase();
     if (!["xlsx", "xls"].includes(extension)) {
-      Swal.fire("Error", "Please select a valid Excel file (.xlsx or .xls)", "error");
+      Swal.fire(
+        "Error",
+        "Please select a valid Excel file (.xlsx or .xls)",
+        "error",
+      );
       return;
     }
 
@@ -293,7 +336,10 @@ export default function ImportContacts() {
     try {
       // Step 1: Upload and start import job
       const uploadRes = await runWithSwalLoader(
-        { title: "Uploading File", text: "Please wait while we send the Excel to the server..." },
+        {
+          title: "Uploading File",
+          text: "Please wait while we send the Excel to the server...",
+        },
         () =>
           api.post("/import/upload", formData, {
             headers: { "Content-Type": "multipart/form-data" },
@@ -400,7 +446,11 @@ export default function ImportContacts() {
       if (completedJobSnapshot) {
         const importedCount = Math.max(
           0,
-          Number(completedJobSnapshot.imported || completedJobSnapshot?.history?.totalImported || 0),
+          Number(
+            completedJobSnapshot.imported ||
+              completedJobSnapshot?.history?.totalImported ||
+              0,
+          ),
         );
         const durationSeconds = Math.max(
           1,
@@ -437,7 +487,9 @@ export default function ImportContacts() {
       }
 
       if (terminalJobSnapshot) {
-        const isCancelled = String(terminalJobSnapshot?.status || "").toLowerCase() === "cancelled";
+        const isCancelled =
+          String(terminalJobSnapshot?.status || "").toLowerCase() ===
+          "cancelled";
         await Swal.fire(
           isCancelled ? "Import Cancelled" : "Import Failed",
           terminalJobSnapshot?.error ||
@@ -452,13 +504,17 @@ export default function ImportContacts() {
       if (modalResult.isConfirmed) {
         try {
           const cancelRes = await api.post(`/import/cancel/${jobId}`);
-          const cancelStatus = String(cancelRes?.data?.status || "").toLowerCase();
+          const cancelStatus = String(
+            cancelRes?.data?.status || "",
+          ).toLowerCase();
 
           if (cancelStatus === "completed") {
             const { data: finalJob } = await api.get(`/import/status/${jobId}`);
             const importedCount = Math.max(
               0,
-              Number(finalJob.imported || finalJob?.history?.totalImported || 0),
+              Number(
+                finalJob.imported || finalJob?.history?.totalImported || 0,
+              ),
             );
             const durationSeconds = Math.max(
               1,
@@ -501,19 +557,29 @@ export default function ImportContacts() {
           );
           fetchHistory();
         } catch (err) {
-          Swal.fire("Error", getApiErrorMessage(err, "Failed to cancel import"), "error");
+          Swal.fire(
+            "Error",
+            getApiErrorMessage(err, "Failed to cancel import"),
+            "error",
+          );
         }
       }
     } catch (err) {
       if (err.name !== "CanceledError" && err.name !== "AbortError") {
         console.error("Import start error:", err);
-        Swal.fire("Error", getApiErrorMessage(err, "Failed to start import task"), "error");
+        Swal.fire(
+          "Error",
+          getApiErrorMessage(err, "Failed to start import task"),
+          "error",
+        );
       }
     }
   };
 
   const showSkipDetails = async (historyEntry) => {
-    const details = Array.isArray(historyEntry?.skipDetails) ? historyEntry.skipDetails : [];
+    const details = Array.isArray(historyEntry?.skipDetails)
+      ? historyEntry.skipDetails
+      : [];
     if (!details || details.length === 0) return;
 
     let html = `
@@ -565,115 +631,121 @@ export default function ImportContacts() {
   };
 
   return (
-    <div className="mx-auto">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+    <div className="app-page app-page-wide">
+      <div className="page-header">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">Import Contacts</h1>
-          <p className="text-gray-600">Upload excel files to bulk import contacts and create groups.</p>
+          <h1 className="page-title">Import Contacts</h1>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="page-actions">
           {history.length > 0 && (
             <button
               onClick={handleClearHistory}
-              className="flex items-center justify-center gap-2 bg-red-50 text-red-600 border border-red-100 hover:bg-red-100 px-4 py-2.5 rounded-lg font-semibold transition-all active:scale-95"
+              className="btn btn-ghost-danger"
               title="Clear all import history"
             >
               <Trash size={18} />
               <span className="hidden sm:inline">Clear History</span>
             </button>
           )}
-          <button
-            onClick={handleImportClick}
-            className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg font-semibold transition-all shadow-md active:scale-95"
-          >
+          <button onClick={handleImportClick} className="btn btn-primary">
             <FileUp size={20} />
             Import
           </button>
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="p-4 border-b bg-gray-50 flex items-center justify-between">
+      <div className="app-card overflow-hidden">
+        <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50/80 p-4">
           <div className="flex items-center gap-2">
-            <Clock size={18} className="text-gray-500" />
-            <h2 className="font-semibold text-gray-700">Import History</h2>
+            <Clock size={18} className="text-slate-500" />
+            <h2 className="font-semibold text-slate-700">Import History</h2>
           </div>
-          <button 
+          <button
             onClick={handleRefresh}
             disabled={isRefreshing}
-            className={`p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all ${isRefreshing ? 'opacity-50' : ''}`}
+            className={`btn btn-secondary btn-icon ${isRefreshing ? "opacity-50" : ""}`}
             title="Refresh History"
           >
-            <RefreshCw size={18} className={isRefreshing ? 'animate-spin' : ''} />
+            <RefreshCw
+              size={18}
+              className={isRefreshing ? "animate-spin" : ""}
+            />
           </button>
         </div>
 
         <div>
           {loading ? (
-            <div className="p-12 text-center text-gray-500 font-medium">Loading history...</div>
+            <div className="p-12 text-center font-medium text-slate-500">
+              Loading history...
+            </div>
           ) : history.length === 0 ? (
             <div className="p-12 text-center">
-              <div className="bg-gray-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Info size={32} className="text-gray-400" />
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-slate-100">
+                <Info size={32} className="text-slate-400" />
               </div>
-              <p className="text-gray-500">No import history found.</p>
-              <p className="text-sm text-gray-400 mt-1">Start by clicking the "Import" button above.</p>
+              <p className="text-slate-500">No import history found.</p>
+              <p className="mt-1 text-sm text-slate-400">
+                Start by clicking the "Import" button above.
+              </p>
             </div>
           ) : (
             <>
-              {/* Desktop Table View */}
-              <div className="hidden md:block overflow-x-auto">
-                <table className="w-full text-left">
+              <div className="hidden md:block app-table-wrap">
+                <table className="app-table">
                   <thead>
-                    <tr className="bg-gray-50/50 text-gray-600 text-sm uppercase tracking-wider">
-                      <th className="px-6 py-4 font-semibold">Date</th>
-                      <th className="px-6 py-4 font-semibold">File Name</th>
-                      <th className="px-6 py-4 font-semibold">Time</th>
-                      <th className="px-6 py-4 font-semibold">Imported</th>
-                      <th className="px-6 py-4 font-semibold">Skipped</th>
-                      <th className="px-6 py-4 font-semibold text-right">Actions</th>
+                    <tr>
+                      <th>Date</th>
+                      <th>File Name</th>
+                      <th>Time</th>
+                      <th>Imported</th>
+                      <th>Skipped</th>
+                      <th className="text-right">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100">
+                  <tbody>
                     {history.map((h) => (
-                      <tr key={h._id} className="hover:bg-gray-50/80 transition-colors group">
-                        <td className="px-6 py-4 text-sm text-gray-600 whitespace-nowrap">
+                      <tr key={h._id}>
+                        <td className="whitespace-nowrap text-sm text-slate-600">
                           {formatDate(h.createdAt)}
                         </td>
-                        <td className="px-6 py-4">
-                          <span className="font-medium text-gray-800 line-clamp-1">{h.fileName}</span>
+                        <td>
+                          <span className="line-clamp-1 font-medium text-slate-800">
+                            {h.fileName}
+                          </span>
                         </td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-1.5 text-gray-600 font-semibold text-sm">
+                        <td>
+                          <div className="flex items-center gap-1.5 text-sm font-semibold text-slate-600">
                             <Clock size={16} />
                             {formatDuration(h.duration)}
                           </div>
                         </td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-1.5 text-green-600 font-semibold text-sm">
+                        <td>
+                          <div className="flex items-center gap-1.5 text-sm font-semibold text-green-600">
                             <CheckCircle size={16} />
                             {h.totalImported}
                           </div>
                         </td>
-                        <td className="px-6 py-4">
-                          <div className={`flex items-center gap-1.5 font-semibold text-sm ${h.totalSkipped > 0 ? 'text-amber-600' : 'text-gray-400'}`}>
+                        <td>
+                          <div
+                            className={`flex items-center gap-1.5 text-sm font-semibold ${h.totalSkipped > 0 ? "text-amber-600" : "text-slate-400"}`}
+                          >
                             <AlertTriangle size={16} />
                             {h.totalSkipped}
                           </div>
                         </td>
-                        <td className="px-6 py-4 text-right">
+                        <td className="text-right">
                           <div className="flex items-center justify-end gap-3 transition-opacity">
                             {h.totalSkipped > 0 && (
                               <button
                                 onClick={() => showSkipDetails(h)}
-                                className="text-blue-600 hover:text-blue-800 text-sm font-medium underline underline-offset-4"
+                                className="text-sm font-medium text-blue-600 underline underline-offset-4 transition-colors hover:text-blue-800"
                               >
                                 View Skipped
                               </button>
                             )}
                             <button
                               onClick={() => handleDeleteHistory(h._id)}
-                              className="p-1.5 text-gray-400 hover:text-red-600 transition-colors rounded-lg hover:bg-red-50"
+                              className="btn btn-secondary btn-icon text-slate-400 hover:text-red-600"
                               title="Delete individual record"
                             >
                               <Trash2 size={18} />
@@ -686,27 +758,32 @@ export default function ImportContacts() {
                 </table>
               </div>
 
-              {/* Mobile Card View */}
-              <div className="md:hidden divide-y divide-gray-100">
+              <div className="divide-y divide-slate-100 md:hidden">
                 {history.map((h) => (
-                  <div key={h._id} className="p-4 hover:bg-gray-50 transition-colors">
+                  <div
+                    key={h._id}
+                    className="p-4 transition-colors hover:bg-slate-50"
+                  >
                     <div className="flex items-start justify-between gap-3 mb-2">
                       <div className="flex-1 min-w-0">
-                        <div className="font-semibold text-gray-800 truncate" title={h.fileName}>
+                        <div
+                          className="truncate font-semibold text-slate-800"
+                          title={h.fileName}
+                        >
                           {h.fileName}
                         </div>
-                        <div className="flex items-center gap-1.5 text-xs text-gray-400 mt-0.5">
+                        <div className="mt-0.5 flex items-center gap-1.5 text-xs text-slate-400">
                           <Clock size={12} />
                           {formatDate(h.createdAt)}
                         </div>
-                        <div className="flex items-center gap-1.5 text-xs text-gray-400 mt-0.5">
+                        <div className="mt-0.5 flex items-center gap-1.5 text-xs text-slate-400">
                           <Clock size={12} />
                           Time: {formatDuration(h.duration)}
                         </div>
                       </div>
                       <button
                         onClick={() => handleDeleteHistory(h._id)}
-                        className="p-2 text-gray-400 hover:text-red-500 transition-colors bg-gray-50 rounded-lg"
+                        className="btn btn-secondary btn-icon text-slate-400 hover:text-red-500"
                       >
                         <Trash2 size={18} />
                       </button>
@@ -714,19 +791,33 @@ export default function ImportContacts() {
 
                     <div className="grid grid-cols-2 gap-3 mt-4">
                       <div className="bg-green-50/50 p-2.5 rounded-lg border border-green-100">
-                        <div className="text-[10px] uppercase tracking-wider font-bold text-green-700 opacity-70 mb-0.5">Imported</div>
-                        <div className="text-lg font-bold text-green-600">{h.totalImported}</div>
+                        <div className="text-[10px] uppercase tracking-wider font-bold text-green-700 opacity-70 mb-0.5">
+                          Imported
+                        </div>
+                        <div className="text-lg font-bold text-green-600">
+                          {h.totalImported}
+                        </div>
                       </div>
-                      <div className={`${h.totalSkipped > 0 ? 'bg-amber-50/50 border-amber-100' : 'bg-gray-50 border-gray-100'} p-2.5 rounded-lg border`}>
-                        <div className={`text-[10px] uppercase tracking-wider font-bold opacity-70 mb-0.5 ${h.totalSkipped > 0 ? 'text-amber-700' : 'text-gray-500'}`}>Skipped</div>
-                        <div className={`text-lg font-bold ${h.totalSkipped > 0 ? 'text-amber-600' : 'text-gray-400'}`}>{h.totalSkipped}</div>
+                      <div
+                        className={`${h.totalSkipped > 0 ? "bg-amber-50/50 border-amber-100" : "bg-gray-50 border-gray-100"} p-2.5 rounded-lg border`}
+                      >
+                        <div
+                          className={`text-[10px] uppercase tracking-wider font-bold opacity-70 mb-0.5 ${h.totalSkipped > 0 ? "text-amber-700" : "text-gray-500"}`}
+                        >
+                          Skipped
+                        </div>
+                        <div
+                          className={`text-lg font-bold ${h.totalSkipped > 0 ? "text-amber-600" : "text-gray-400"}`}
+                        >
+                          {h.totalSkipped}
+                        </div>
                       </div>
                     </div>
 
                     {h.totalSkipped > 0 && (
                       <button
                         onClick={() => showSkipDetails(h)}
-                        className="w-full bg-blue-50 text-blue-600 font-semibold text-sm py-2 px-4 rounded-lg mt-3 hover:bg-blue-100 transition-colors flex items-center justify-center gap-2"
+                        className="btn btn-secondary mt-3 w-full justify-center text-blue-700"
                       >
                         <Info size={16} />
                         View Skipped Details
@@ -742,5 +833,3 @@ export default function ImportContacts() {
     </div>
   );
 }
-
-
