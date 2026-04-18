@@ -2,7 +2,7 @@ name: Deploy Frontend
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
     paths:
       - "client/**"
 
@@ -12,17 +12,18 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5 # ✅ updated
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5 # ✅ updated
         with:
-          node-version: 18
+          node-version: 22 # ✅ better than 18 (future-safe)
+          cache: "npm" # 🚀 speed boost
 
       - name: Install & Build
         working-directory: client
         run: |
-          npm install
+          npm ci
           npm run build
 
       - name: Upload dist to EC2
