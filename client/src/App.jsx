@@ -16,6 +16,7 @@ import Settings from "./pages/Settings";
 import SuperAdminLogin from "./pages/SuperAdmin/SuperAdminLogin";
 import SuperAdminDashboard from "./pages/SuperAdmin/SuperAdminDashboard";
 
+// This is the main App component that sets up routing for the application using React Router.
 export default function App() {
   return (
     <BrowserRouter>
