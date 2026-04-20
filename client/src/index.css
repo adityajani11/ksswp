@@ -434,6 +434,12 @@ ul {
   color: var(--app-text-soft);
 }
 
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .app-list {
   overflow: hidden;
   border: 1px solid var(--app-border);
@@ -1179,5 +1185,23 @@ ul {
 
   .auth-form-panel {
     padding: 1.5rem;
+  }
+}
+.footer-stack-mobile {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+}
+
+@media (max-width: 767px) {
+  .footer-stack-mobile {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .footer-stack-mobile > button {
+    width: 100%;
+    justify-content: center;
   }
 }
