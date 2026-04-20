@@ -1,7 +1,8 @@
-import { useDeferredValue, useEffect, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import Swal from "sweetalert2";
 import api, { getApiErrorMessage } from "../utils/api";
 import { fetchGroupSummaries, fetchGroupsByIds } from "../utils/groupDirectory";
+import { getContactPhoneValue, toDisplayPhone } from "../utils/phone";
 
 function mergeGroupsById(baseGroups, incomingGroups) {
   const incomingById = new Map(
@@ -10,32 +11,28 @@ function mergeGroupsById(baseGroups, incomingGroups) {
   const seen = new Set();
 
   const merged = baseGroups.map((group) => {
-    const incoming = incomingById.get(String(group._id));
+    const groupId = String(group._id);
+    const incoming = incomingById.get(groupId);
+    seen.add(groupId);
     if (!incoming) {
       return group;
     }
-
-    seen.add(String(group._id));
-
     return {
       ...group,
       ...incoming,
       contacts: incoming.contactsLoaded ? incoming.contacts : group.contacts,
-      contactsLoaded: Boolean(incoming.contactsLoaded || group.contactsLoaded),
-      contactCount:
-        incoming.contactCount ?? group.contactCount ?? incoming.contacts?.length ?? 0,
+      contactsLoaded: group.contactsLoaded || incoming.contactsLoaded,
     };
   });
 
-  for (const group of incomingGroups) {
-    if (!seen.has(String(group._id))) {
+  for (const [groupId, group] of incomingById) {
+    if (!seen.has(groupId)) {
       merged.push(group);
     }
   }
 
   return merged;
 }
-
 
 function uniqueItems(items) {
   return [...new Set(items)];
@@ -50,20 +47,8 @@ function filterGroupsByName(groups, search) {
   if (!query) {
     return groups;
   }
-
   return groups.filter((group) =>
-    String(group.name || "").toLowerCase().includes(query),
-  );
-}
-
-function filterContactsByMobile(contacts, mobileSearch) {
-  const queryDigits = String(mobileSearch || "").replace(/\D/g, "");
-  if (!queryDigits) {
-    return contacts;
-  }
-
-  return (Array.isArray(contacts) ? contacts : []).filter((contact) =>
-    String(contact?.phone || "").replace(/\D/g, "").includes(queryDigits),
+    String(group?.name || "").toLowerCase().includes(query),
   );
 }
 
@@ -79,7 +64,7 @@ function buildMobileSearchMatches(groups, mobileSearch) {
     const groupName = String(group?.name || "").trim();
 
     for (const contact of Array.isArray(group?.contacts) ? group.contacts : []) {
-      const phone = String(contact?.phone || "").trim();
+      const phone = getContactPhoneValue(contact);
       if (!phone) {
         continue;
       }
@@ -89,21 +74,26 @@ function buildMobileSearchMatches(groups, mobileSearch) {
         continue;
       }
 
+      const contactName = String(contact?.name || "").trim();
+
       if (!matchesByPhone.has(phone)) {
         matchesByPhone.set(phone, {
+          id: `match-${phone}`,
           phone,
-          name: String(contact?.name || "").trim(),
+          displayPhone: toDisplayPhone(phone),
+          name: contactName,
           groupNames: groupName ? [groupName] : [],
         });
         continue;
       }
 
       const existing = matchesByPhone.get(phone);
-      if (
-        groupName &&
-        !existing.groupNames.includes(groupName)
-      ) {
+      if (groupName && !existing.groupNames.includes(groupName)) {
         existing.groupNames.push(groupName);
+      }
+
+      if (!existing.name && contactName) {
+        existing.name = contactName;
       }
     }
   }
@@ -122,10 +112,10 @@ function buildSelectedContacts(groups, selectedGroupIds, manuallyDeselected) {
     if (!selectedGroupIdSet.has(group._id) || !Array.isArray(group.contacts)) {
       continue;
     }
-
     for (const contact of group.contacts) {
-      if (!manuallyDeselectedSet.has(contact.phone)) {
-        selectedPhones.add(contact.phone);
+      const phone = getContactPhoneValue(contact);
+      if (phone && !manuallyDeselectedSet.has(phone)) {
+        selectedPhones.add(phone);
       }
     }
   }
@@ -135,11 +125,12 @@ function buildSelectedContacts(groups, selectedGroupIds, manuallyDeselected) {
 
 function buildRecipientsPayload(groups, selectedContacts) {
   const phoneToName = new Map();
-
   for (const group of groups) {
-    for (const contact of group.contacts || []) {
-      if (!phoneToName.has(contact.phone)) {
-        phoneToName.set(contact.phone, contact.name || "");
+    if (!Array.isArray(group.contacts)) continue;
+    for (const contact of group.contacts) {
+      const phone = getContactPhoneValue(contact);
+      if (phone) {
+        phoneToName.set(phone, String(contact.name || "").trim());
       }
     }
   }
@@ -183,8 +174,9 @@ export default function useRecipientGroups() {
   const [expandedGroups, setExpandedGroups] = useState([]);
   const [search, setSearch] = useState("");
   const [mobileSearch, setMobileSearch] = useState("");
+  const [mobileSearchLoading, setMobileSearchLoading] = useState(false);
+  const [selectedIndividualContacts, setSelectedIndividualContacts] = useState([]);
 
-  const deferredSearch = useDeferredValue(search);
   const groupsRef = useRef([]);
   const batchesRef = useRef([]);
   const selectedGroupsRef = useRef([]);
@@ -192,6 +184,7 @@ export default function useRecipientGroups() {
   const selectedBatchesRef = useRef([]);
   const selectedContactsRef = useRef([]);
   const manuallyDeselectedRef = useRef([]);
+  const selectedIndividualContactsRef = useRef([]);
 
   const syncGroups = (nextGroups) => {
     groupsRef.current = nextGroups;
@@ -235,6 +228,11 @@ export default function useRecipientGroups() {
     return nextManuallyDeselected;
   };
 
+  const syncSelectedIndividualContacts = (nextIndividual) => {
+    selectedIndividualContactsRef.current = nextIndividual;
+    setSelectedIndividualContacts(nextIndividual);
+    return nextIndividual;
+  };
 
   const mergeAndStoreGroups = (incomingGroups, { useIncomingOrder = false } = {}) => {
     const nextGroups = useIncomingOrder
@@ -248,9 +246,7 @@ export default function useRecipientGroups() {
     if (groupsRef.current.length && !force) {
       return groupsRef.current;
     }
-
     setGroupsLoading(true);
-
     try {
       const summaries = await fetchGroupSummaries({ force });
       return mergeAndStoreGroups(summaries, { useIncomingOrder: true });
@@ -266,15 +262,12 @@ export default function useRecipientGroups() {
     if (batchesRef.current.length && !force) {
       return batchesRef.current;
     }
-
     setBatchesLoading(true);
-
     try {
       const res = await api.get("/batches");
       const nextBatches = (Array.isArray(res.data) ? res.data : [])
         .map((batch) => normalizeBatch(batch))
         .filter((batch) => batch._id);
-
       return syncBatches(nextBatches);
     } catch (err) {
       Swal.fire("Error", getApiErrorMessage(err, "Failed to load batches"), "error");
@@ -289,7 +282,6 @@ export default function useRecipientGroups() {
       ensureGroupSummariesLoaded(),
       ensureBatchesLoaded(),
     ]);
-
     return nextGroups;
   };
 
@@ -326,13 +318,15 @@ export default function useRecipientGroups() {
   const recalculateSelectedContacts = (
     nextSelectedGroups = selectedGroupsRef.current,
     nextManuallyDeselected = manuallyDeselectedRef.current,
+    nextIndividual = selectedIndividualContactsRef.current,
   ) => {
-    const nextSelectedContacts = buildSelectedContacts(
+    const groupContacts = buildSelectedContacts(
       groupsRef.current,
       nextSelectedGroups,
       nextManuallyDeselected,
     );
 
+    const nextSelectedContacts = uniqueItems([...groupContacts, ...nextIndividual]);
     return syncSelectedContacts(nextSelectedContacts);
   };
 
@@ -349,7 +343,6 @@ export default function useRecipientGroups() {
       if (!selectedBatchIdSet.has(String(batch._id))) {
         continue;
       }
-
       for (const groupId of batch.groupIds || []) {
         batchGroupIds.push(String(groupId));
       }
@@ -397,6 +390,7 @@ export default function useRecipientGroups() {
     syncSelectedBatches([]);
     syncSelectedContacts([]);
     syncManuallyDeselected([]);
+    syncSelectedIndividualContacts([]);
     setExpandedGroups([]);
   };
 
@@ -422,7 +416,6 @@ export default function useRecipientGroups() {
   const toggleGroup = async (group) => {
     const groupId = String(group._id);
     const nextGroups = await ensureGroupDetailsLoaded([groupId]);
-
     if (!nextGroups) {
       return;
     }
@@ -443,7 +436,6 @@ export default function useRecipientGroups() {
     const batchGroupIds = uniqueItems(
       (batch.groupIds || []).map((groupId) => String(groupId)),
     );
-
     if (!batchGroupIds.length) {
       return;
     }
@@ -468,21 +460,27 @@ export default function useRecipientGroups() {
   const toggleContact = (phone) => {
     const normalizedPhone = String(phone);
     const isSelected = selectedContactsRef.current.includes(normalizedPhone);
-    const nextSelectedContacts = isSelected
-      ? removeItem(selectedContactsRef.current, normalizedPhone)
-      : [...selectedContactsRef.current, normalizedPhone];
-    const nextManuallyDeselected = isSelected
-      ? [...manuallyDeselectedRef.current, normalizedPhone]
-      : removeItem(manuallyDeselectedRef.current, normalizedPhone);
 
-    syncSelectedContacts(nextSelectedContacts);
-    syncManuallyDeselected(nextManuallyDeselected);
+    let nextIndividual = selectedIndividualContactsRef.current;
+    let nextDeselected = manuallyDeselectedRef.current;
+
+    if (isSelected) {
+      // Deselecting: remove from individual and add to manually deselected
+      nextIndividual = removeItem(nextIndividual, normalizedPhone);
+      nextDeselected = uniqueItems([...nextDeselected, normalizedPhone]);
+    } else {
+      // Selecting: add to individual and remove from manually deselected
+      nextIndividual = uniqueItems([...nextIndividual, normalizedPhone]);
+      nextDeselected = removeItem(nextDeselected, normalizedPhone);
+    }
+
+    syncSelectedIndividualContacts(nextIndividual);
+    syncManuallyDeselected(nextDeselected);
+    recalculateSelectedContacts(undefined, nextDeselected, nextIndividual);
   };
-
 
   const selectAll = async () => {
     setSelectionLoading(true);
-
     try {
       const query = String(search || "").trim();
       let groupsToSelect = groupsRef.current;
@@ -492,7 +490,6 @@ export default function useRecipientGroups() {
         if (!availableGroups) {
           return;
         }
-
         groupsToSelect = availableGroups;
       }
 
@@ -526,11 +523,7 @@ export default function useRecipientGroups() {
         expandSelectedGroups: true,
       });
     } catch (err) {
-      Swal.fire(
-        "Error",
-        getApiErrorMessage(err, "Failed to select contacts"),
-        "error",
-      );
+      Swal.fire("Error", getApiErrorMessage(err, "Failed to select contacts"), "error");
     } finally {
       setSelectionLoading(false);
     }
@@ -541,34 +534,77 @@ export default function useRecipientGroups() {
     if (!nextGroups) {
       return null;
     }
-
     return buildRecipientsPayload(groupsRef.current, selectedContactsRef.current);
   };
 
-  const trimmedDeferredSearch = String(deferredSearch || "").trim();
-  const visibleGroups = filterGroupsByName(groups, trimmedDeferredSearch);
-  const visibleBatches = trimmedDeferredSearch
-    ? batches.filter((batch) =>
-        String(batch.name || "")
-          .toLowerCase()
-          .includes(trimmedDeferredSearch.toLowerCase()),
-      )
-    : batches;
-  const mobileSearchMatches = buildMobileSearchMatches(groups, mobileSearch);
+  const trimmedSearch = String(search || "").trim();
+
+  const visibleGroups = useMemo(() => {
+    return filterGroupsByName(groups, trimmedSearch);
+  }, [groups, trimmedSearch]);
+
+  const visibleBatches = useMemo(() => {
+    return batches;
+  }, [batches]);
+
+  const mobileSearchMatches = useMemo(() => {
+    return buildMobileSearchMatches(groups, mobileSearch);
+  }, [groups, mobileSearch]);
+
+  const selectedIndividualDetails = useMemo(() => {
+    if (!selectedIndividualContacts.length) return [];
+    // We can reuse buildMobileSearchMatches logic but without filtering by query,
+    // or just match from all contacts.
+    // actually, let's just use buildMobileSearchMatches with an empty logic or similar
+    const allMatches = buildMobileSearchMatches(groups, ""); // This is not efficient as it won't return anything if query is empty
+    // Let's implement a quick lookup
+    const details = [];
+    const phoneSet = new Set(selectedIndividualContacts);
+    
+    // We already have buildMobileSearchMatches, let's use it with a trick or just simple loop
+    for (const group of groups) {
+      if (!group.contacts) continue;
+      for (const contact of group.contacts) {
+        const phone = getContactPhoneValue(contact);
+        if (phone && phoneSet.has(phone)) {
+          const existing = details.find(d => d.phone === phone);
+          if (existing) {
+            if (group.name && !existing.groupNames.includes(group.name)) {
+              existing.groupNames.push(group.name);
+            }
+          } else {
+            details.push({
+              id: `sel-${phone}`,
+              phone,
+              displayPhone: toDisplayPhone(phone),
+              name: contact.name || "",
+              groupNames: group.name ? [group.name] : []
+            });
+          }
+        }
+      }
+    }
+    return details;
+  }, [groups, selectedIndividualContacts]);
 
   useEffect(() => {
     const queryDigits = String(mobileSearch || "").replace(/\D/g, "");
     if (!queryDigits) {
+      setMobileSearchLoading(false);
       return;
     }
+    setMobileSearchLoading(true);
 
     const allGroupIds = groupsRef.current.map((group) => String(group._id));
     if (!allGroupIds.length) {
+      setMobileSearchLoading(false);
       return;
     }
 
-    ensureGroupDetailsLoaded(allGroupIds);
-  }, [mobileSearch]);
+    ensureGroupDetailsLoaded(allGroupIds).finally(() => {
+      setMobileSearchLoading(false);
+    });
+  }, [mobileSearch, groups.length]);
 
   return {
     groups: visibleGroups,
@@ -576,10 +612,12 @@ export default function useRecipientGroups() {
     mobileSearchMatches,
     groupsLoading,
     batchesLoading,
+    mobileSearchLoading,
     selectionLoading,
     selectedGroups,
     selectedBatches,
     selectedContacts,
+    selectedIndividualDetails,
     expandedGroups,
     search,
     setSearch,
@@ -596,8 +634,5 @@ export default function useRecipientGroups() {
     toggleBatch,
     toggleGroupExpand,
     selectAll,
-    filterContactsByMobile: (contacts) =>
-      filterContactsByMobile(contacts, mobileSearch),
   };
 }
-

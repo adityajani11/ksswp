@@ -108,7 +108,9 @@ export default function Settings() {
 
   const isBusy = Boolean(workingAction);
   const usernameChanged = useMemo(
-    () => String(nextUsername || "").trim() !== String(currentUsername || "").trim(),
+    () =>
+      String(nextUsername || "").trim() !==
+      String(currentUsername || "").trim(),
     [nextUsername, currentUsername],
   );
 
@@ -202,7 +204,9 @@ export default function Settings() {
           }),
       );
 
-      const updatedUsername = String(res.data?.user?.username || normalizedUsername);
+      const updatedUsername = String(
+        res.data?.user?.username || normalizedUsername,
+      );
       setCurrentUsername(updatedUsername);
       setNextUsername(updatedUsername);
 
@@ -323,14 +327,13 @@ export default function Settings() {
   };
 
   const handleChangeContactNumber = async () => {
-    const normalizedNextContactNumber = normalizeContactNumberInput(
-      nextContactNumber,
-    );
+    const normalizedNextContactNumber =
+      normalizeContactNumberInput(nextContactNumber);
 
     if (!normalizedNextContactNumber) {
       Swal.fire(
         "Invalid",
-        "Enter a valid contact number (for example +919824650646)",
+        "Enter a valid contact number (for example +91XXXXXXXXXX)",
         "warning",
       );
       return;
@@ -396,71 +399,80 @@ export default function Settings() {
   };
 
   if (loadingProfile) {
-    return <p className="text-gray-500">Loading settings...</p>;
+    return (
+      <div className="app-page">
+        <div className="app-empty-state">Loading settings...</div>
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-6 max-w-3xl">
+    <div className="app-page app-page-compact">
       <div>
-        <h2 className="text-2xl font-semibold">Settings</h2>
-        <p className="text-sm text-gray-600 mt-1">
+        <h1 className="page-title">Settings</h1>
+        <p className="page-subtitle">
           All credential changes require OTP verification on WhatsApp.
         </p>
         {otpMaskedPhone && (
-          <p className="text-xs text-gray-500 mt-1">
+          <p className="mt-2 text-xs text-slate-500">
             OTP destination: {otpMaskedPhone}
           </p>
         )}
       </div>
 
-      <section className="bg-white border rounded-lg p-4 space-y-3">
-        <h3 className="text-lg font-semibold">Change Username</h3>
-        <p className="text-sm text-gray-600">
-          Current username: <span className="font-medium">{currentUsername}</span>
+      <section className="app-card app-card-section space-y-3">
+        <h3 className="text-lg font-semibold text-slate-900">
+          Change Username
+        </h3>
+        <p className="text-sm text-slate-600">
+          Current username:{" "}
+          <span className="font-medium">{currentUsername}</span>
         </p>
         <input
           type="text"
           value={nextUsername}
           onChange={(e) => setNextUsername(e.target.value)}
           placeholder="Enter new username"
-          className="w-full border p-2 rounded"
+          className="app-field"
           disabled={isBusy}
         />
         <button
           type="button"
           onClick={handleChangeUsername}
           disabled={isBusy || !usernameChanged}
-          className="bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-50"
+          className="btn btn-primary"
         >
           {workingAction === "username" ? "Please wait..." : "Change Username"}
         </button>
       </section>
 
-      <section className="bg-white border rounded-lg p-4 space-y-3">
-        <h3 className="text-lg font-semibold">Change Contact Number</h3>
-        <p className="text-sm text-gray-600">
+      <section className="app-card app-card-section space-y-3">
+        <h3 className="text-lg font-semibold text-slate-900">
+          Change Contact Number
+        </h3>
+        <p className="text-sm text-slate-600">
           Current contact number:
           <span className="font-medium">
             {" "}
             {formatContactNumberDisplay(currentContactNumber) || "Not set"}
           </span>
         </p>
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-slate-500">
           OTP will be sent to the old contact number for verification.
         </p>
         <input
           type="text"
           value={nextContactNumber}
           onChange={(e) => setNextContactNumber(e.target.value)}
-          placeholder="Enter new contact number (e.g. +919824650646)"
-          className="w-full border p-2 rounded"
+          placeholder="Enter new contact number (e.g. +91XXXXXXXXXX)"
+          className="app-field"
           disabled={isBusy}
         />
         <button
           type="button"
           onClick={handleChangeContactNumber}
           disabled={isBusy}
-          className="bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-50"
+          className="btn btn-primary"
         >
           {workingAction === "contact-number"
             ? "Please wait..."
@@ -468,14 +480,16 @@ export default function Settings() {
         </button>
       </section>
 
-      <section className="bg-white border rounded-lg p-4 space-y-3">
-        <h3 className="text-lg font-semibold">Change Login Password</h3>
+      <section className="app-card app-card-section space-y-3">
+        <h3 className="text-lg font-semibold text-slate-900">
+          Change Login Password
+        </h3>
         <input
           type="password"
           value={newLoginPassword}
           onChange={(e) => setNewLoginPassword(e.target.value)}
           placeholder="New login password"
-          className="w-full border p-2 rounded"
+          className="app-field"
           disabled={isBusy}
         />
         <input
@@ -483,14 +497,14 @@ export default function Settings() {
           value={confirmLoginPassword}
           onChange={(e) => setConfirmLoginPassword(e.target.value)}
           placeholder="Confirm new login password"
-          className="w-full border p-2 rounded"
+          className="app-field"
           disabled={isBusy}
         />
         <button
           type="button"
           onClick={handleChangeLoginPassword}
           disabled={isBusy}
-          className="bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-50"
+          className="btn btn-primary"
         >
           {workingAction === "login-password"
             ? "Please wait..."
@@ -498,14 +512,16 @@ export default function Settings() {
         </button>
       </section>
 
-      <section className="bg-white border rounded-lg p-4 space-y-3">
-        <h3 className="text-lg font-semibold">Change Delete Password</h3>
+      <section className="app-card app-card-section space-y-3">
+        <h3 className="text-lg font-semibold text-slate-900">
+          Change Delete Password
+        </h3>
         <input
           type="password"
           value={newDeletePassword}
           onChange={(e) => setNewDeletePassword(e.target.value)}
           placeholder="New delete password"
-          className="w-full border p-2 rounded"
+          className="app-field"
           disabled={isBusy}
         />
         <input
@@ -513,14 +529,14 @@ export default function Settings() {
           value={confirmDeletePassword}
           onChange={(e) => setConfirmDeletePassword(e.target.value)}
           placeholder="Confirm new delete password"
-          className="w-full border p-2 rounded"
+          className="app-field"
           disabled={isBusy}
         />
         <button
           type="button"
           onClick={handleChangeDeletePassword}
           disabled={isBusy}
-          className="bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-50"
+          className="btn btn-primary"
         >
           {workingAction === "delete-password"
             ? "Please wait..."

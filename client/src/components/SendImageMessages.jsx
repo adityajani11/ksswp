@@ -1,12 +1,13 @@
 import { useRef, useState } from "react";
 import Swal from "sweetalert2";
 import api, { getApiErrorMessage } from "../utils/api";
-import { Image, ChevronDown, ChevronRight, Search } from "lucide-react";
+import { Image } from "lucide-react";
 import {
   showCampaignSummary,
   waitForCampaignCompletion,
 } from "../utils/campaignProgress";
 import useRecipientGroups from "../hooks/useRecipientGroups";
+import RecipientSelectionModal from "./RecipientSelectionModal";
 
 export default function SendImageMessages() {
   const [caption, setCaption] = useState("");
@@ -36,7 +37,6 @@ export default function SendImageMessages() {
     toggleBatch,
     toggleGroupExpand,
     selectAll,
-    filterContactsByMobile,
   } = useRecipientGroups();
 
   const fileInputRef = useRef(null);
@@ -235,11 +235,30 @@ export default function SendImageMessages() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      <div className="bg-white border rounded-xl p-4 space-y-3">
-        <div className="flex items-center gap-2 font-medium text-gray-700">
-          <Image size={18} />
-          Image Message
+    <div className="app-page app-page-compact">
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Send Image Message</h1>
+        </div>
+
+        <span className="chip chip-neutral">
+          {imageFile ? imageFile.name : "No image selected"}
+        </span>
+      </div>
+
+      <section className="app-card app-card-section space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="rounded-2xl bg-emerald-50 p-3 text-emerald-700">
+            <Image size={20} />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900">
+              Image composer
+            </h2>
+            <p className="text-sm text-slate-500">
+              Accepted formats: JPG, PNG, and WEBP up to 50 MB.
+            </p>
+          </div>
         </div>
 
         <textarea
@@ -249,7 +268,7 @@ export default function SendImageMessages() {
           rows={3}
           maxLength={500}
           placeholder="Message (max 500 chars)"
-          className="w-full border rounded-lg p-3 resize-none"
+          className="app-textarea min-h-[10rem]"
         />
 
         <input
@@ -259,236 +278,44 @@ export default function SendImageMessages() {
           onChange={handleImageSelect}
         />
 
-        <div className="text-right">
+        <div className="flex justify-end mt-3">
           <button
             onClick={openGroupSelection}
             disabled={!caption || !imageFile}
-            className="bg-green-600 text-white px-5 py-2 rounded disabled:opacity-50"
+            className="btn btn-primary"
           >
             Send Image
           </button>
         </div>
-      </div>
+      </section>
 
-      {showGroupModal && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/40 p-3 sm:p-4">
-          <div className="flex min-h-full items-center justify-center">
-            <div className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl bg-white p-3 shadow-lg">
-              <h3 className="mb-3 flex flex-wrap justify-between gap-2 text-lg font-semibold">
-              Select Recipients
-              <span className="text-sm text-gray-500">
-                {selectedContacts.length} selected
-              </span>
-              </h3>
-
-              <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto pr-1">
-
-            <div className="flex items-center gap-2 mb-3 border rounded px-3 py-2">
-              <Search size={16} className="text-gray-400" />
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search group name..."
-                className="w-full outline-none"
-              />
-            </div>
-
-            <div className="flex items-center gap-2 mb-3 border rounded px-3 py-2">
-              <Search size={16} className="text-gray-400" />
-              <input
-                value={mobileSearch}
-                onChange={(e) => setMobileSearch(e.target.value)}
-                placeholder="Search by mobile number..."
-                className="w-full outline-none"
-              />
-            </div>
-
-            {String(mobileSearch || "").trim() && (
-              <div className="mb-3 border rounded p-3 space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                  Matching Numbers
-                </p>
-                {mobileSearchMatches.length === 0 ? (
-                  <p className="text-sm text-gray-500">
-                    No matching mobile numbers found.
-                  </p>
-                ) : (
-                  <div className="max-h-40 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {mobileSearchMatches.map((contact) => (
-                      <label
-                        key={contact.phone}
-                        className="flex items-center gap-2 text-sm"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selectedContacts.includes(contact.phone)}
-                          onChange={() => toggleContact(contact.phone)}
-                        />
-                        <span>
-                          {contact.name || "Unnamed"}
-                          <span className="text-xs text-gray-500 ml-1">
-                            (+{contact.phone})
-                          </span>
-                        </span>
-                      </label>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            <div className="flex gap-2 mb-3">
-              <button
-                onClick={selectAll}
-                disabled={selectionLoading || groupsLoading}
-                className="text-sm px-3 py-1 bg-gray-100 rounded disabled:opacity-50"
-              >
-                {selectionLoading ? "Selecting..." : "Select All"}
-              </button>
-              <button
-                onClick={discardSelection}
-                className="text-sm px-3 py-1 bg-red-100 text-red-600 rounded"
-              >
-                Discard
-              </button>
-            </div>
-
-            <div className="max-h-72 overflow-y-auto border rounded p-3 space-y-3">
-              {groupsLoading ? (
-                <p className="text-sm text-gray-500">
-                  Loading groups...
-                </p>
-              ) : groups.length === 0 ? (
-                <p className="text-sm text-gray-500">No groups found.</p>
-              ) : (
-                groups.map((group) => (
-                  <div key={group._id} className="border rounded">
-                    <div className="flex items-center gap-2 p-2 bg-gray-50">
-                      <button
-                        onClick={() => toggleGroupExpand(group._id)}
-                        disabled={isGroupLoading(group._id)}
-                      >
-                        {expandedGroups.includes(group._id) ? (
-                          <ChevronDown size={16} />
-                        ) : (
-                          <ChevronRight size={16} />
-                        )}
-                      </button>
-
-                      <input
-                        type="checkbox"
-                        checked={selectedGroups.includes(group._id)}
-                        onChange={() => toggleGroup(group)}
-                        disabled={isGroupLoading(group._id)}
-                      />
-
-                      <span className="font-medium">
-                        {group.name}
-                        <span className="text-xs text-gray-500 ml-1">
-                          ({group.contactCount || 0})
-                        </span>
-                      </span>
-                    </div>
-
-                    {expandedGroups.includes(group._id) && (
-                      <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        {(() => {
-                          const filteredContacts = filterContactsByMobile(group.contacts || []);
-                          if (isGroupLoading(group._id)) {
-                            return <p className="text-sm text-gray-500">Loading contacts...</p>;
-                          }
-                          if ((group.contacts || []).length === 0) {
-                            return <p className="text-sm text-gray-500">No contacts in this group.</p>;
-                          }
-                          if (filteredContacts.length === 0) {
-                            return (
-                              <p className="text-sm text-gray-500">
-                                No contacts match this mobile number.
-                              </p>
-                            );
-                          }
-                          return filteredContacts.map((contact) => (
-                            <label
-                              key={contact.phone}
-                              className="flex items-center gap-2"
-                            >
-                              <input
-                                type="checkbox"
-                                checked={selectedContacts.includes(contact.phone)}
-                                onChange={() => toggleContact(contact.phone)}
-                              />
-                              <span className="text-sm">
-                                {contact.name}
-                                <span className="text-xs text-gray-500 ml-1">
-                                  (+{contact.phone})
-                                </span>
-                              </span>
-                            </label>
-                          ));
-                        })()}
-                      </div>
-                    )}
-                  </div>
-                ))
-              )}
-            </div>
-
-            <div className="mt-3 border rounded p-3 space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Batches
-              </p>
-
-              {batchesLoading ? (
-                <p className="text-sm text-gray-500">Loading batches...</p>
-              ) : batches.length === 0 ? (
-                <p className="text-sm text-gray-500">No batches found.</p>
-              ) : (
-                <div className="space-y-2">
-                  {batches.map((batch) => (
-                    <label
-                      key={batch._id}
-                      className="flex items-start gap-2 text-sm cursor-pointer"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedBatches.includes(batch._id)}
-                        onChange={() => toggleBatch(batch)}
-                        disabled={selectionLoading}
-                      />
-                      <span>
-                        {batch.name}
-                        <span className="text-xs text-gray-500 ml-1">
-                          ({batch.groupCount || batch.groupIds?.length || 0} groups, {batch.contactCount || 0} contacts)
-                        </span>
-                      </span>
-                    </label>
-                  ))}
-                </div>
-              )}
-            </div>
-
-              </div>
-
-              <div className="mt-4 flex justify-end gap-2 border-t pt-3">
-              <button
-                className="border px-4 py-2 rounded"
-                onClick={() => setShowGroupModal(false)}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={sendImageMessages}
-                disabled={!selectedContacts.length}
-                className="bg-green-600 text-white px-4 py-2 rounded disabled:opacity-50"
-              >
-                Send
-              </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <RecipientSelectionModal
+        open={showGroupModal}
+        onClose={() => setShowGroupModal(false)}
+        onSubmit={sendImageMessages}
+        submitLabel="Send Image"
+        groups={groups}
+        batches={batches}
+        groupsLoading={groupsLoading}
+        batchesLoading={batchesLoading}
+        mobileSearchMatches={mobileSearchMatches}
+        selectionLoading={selectionLoading}
+        selectedGroups={selectedGroups}
+        selectedBatches={selectedBatches}
+        selectedContacts={selectedContacts}
+        expandedGroups={expandedGroups}
+        search={search}
+        setSearch={setSearch}
+        mobileSearch={mobileSearch}
+        setMobileSearch={setMobileSearch}
+        discardSelection={discardSelection}
+        isGroupLoading={isGroupLoading}
+        toggleContact={toggleContact}
+        toggleGroup={toggleGroup}
+        toggleBatch={toggleBatch}
+        toggleGroupExpand={toggleGroupExpand}
+        selectAll={selectAll}
+      />
     </div>
   );
 }
-

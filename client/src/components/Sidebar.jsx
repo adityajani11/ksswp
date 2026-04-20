@@ -10,6 +10,10 @@ import {
   FileUp,
   Layers3,
   Settings,
+  Image,
+  Video,
+  FileText,
+  Shield,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import Swal from "sweetalert2";
@@ -122,17 +126,9 @@ export default function Sidebar() {
     };
   }, [open]);
 
-  const linkBase =
-    "flex items-center gap-3 p-2.5 rounded-lg transition-all no-underline";
-
   const linkStyle = ({ isActive }) =>
-    `${linkBase} ${
-      isActive
-        ? "bg-blue-600 text-white shadow text-decoration-none"
-        : "text-gray-700 hover:bg-gray-100 text-decoration-none"
-    }`;
+    isActive ? "app-sidebar-link app-sidebar-link-active" : "app-sidebar-link";
 
-  const actionStyle = `${linkBase} w-full text-left border-0 bg-yellow-600 rounded text-white`;
   const handleLogout = async () => {
     const result = await Swal.fire({
       title: "Logout?",
@@ -218,44 +214,44 @@ export default function Sidebar() {
 
   return (
     <>
-      {/* Mobile Toggle Button */}
-      <button
-        className="md:hidden fixed top-3 left-3 z-50 p-2 rounded-lg bg-white shadow custom-hamburger-button"
-        onClick={() => setOpen(true)}
-      >
-        <Menu size={22} />
-      </button>
+      {!open && (
+        <button
+          className="app-sidebar-toggle custom-hamburger-button md:hidden"
+          onClick={() => setOpen(true)}
+          aria-label="Open navigation menu"
+        >
+          <Menu size={22} />
+        </button>
+      )}
 
-      {/* Backdrop (mobile only) */}
       {open && (
         <div
-          className="fixed inset-0 bg-black/40 z-40 md:hidden"
+          className="fixed inset-0 z-[60] bg-slate-950/45 backdrop-blur-sm md:hidden"
           onClick={() => setOpen(false)}
         />
       )}
 
-      {/* Sidebar */}
-      <aside
-        className={`
-          fixed top-0 left-0 z-50
-          w-64 h-[100dvh] md:h-screen overflow-hidden bg-white border-r flex flex-col
-          transform transition-transform duration-300
-          ${open ? "translate-x-0" : "-translate-x-full"}
-          md:translate-x-0
-        `}
-      >
-        {/* Header */}
-        <div className="p-3 border-b flex items-center justify-between">
-          <h4 className="text-xl font-semibold text-gray-800">ADMIN CONTROL</h4>
-
-          {/* Close button (mobile) */}
-          <button className="md:hidden p-1" onClick={() => setOpen(false)}>
-            <X size={20} />
+      <aside className={`app-sidebar-panel ${open ? "is-open" : ""}`}>
+        {open && (
+          <button
+            className="app-sidebar-close md:hidden"
+            onClick={() => setOpen(false)}
+            aria-label="Close navigation menu"
+          >
+            <X size={22} />
           </button>
+        )}
+
+        <div className="app-sidebar-brand">
+          <span className="app-sidebar-kicker">
+            <Shield size={14} />
+            Admin Workspace
+          </span>
+          <h4 className="app-sidebar-title">Control Center</h4>
+
         </div>
 
-        {/* Menu */}
-        <nav className="p-3 space-y-2 flex-1 min-h-0 overflow-y-auto overscroll-contain">
+        <nav className="app-sidebar-nav">
           <NavLink
             to="/dashboard/groups"
             className={linkStyle}
@@ -285,7 +281,7 @@ export default function Sidebar() {
             className={linkStyle}
             onClick={() => setOpen(false)}
           >
-            <Users size={18} />
+            <Image size={18} />
             <span className="font-medium">Send Image</span>
           </NavLink>
           <NavLink
@@ -293,7 +289,7 @@ export default function Sidebar() {
             className={linkStyle}
             onClick={() => setOpen(false)}
           >
-            <Users size={18} />
+            <Video size={18} />
             <span className="font-medium">Send Video</span>
           </NavLink>
           <NavLink
@@ -301,7 +297,7 @@ export default function Sidebar() {
             className={linkStyle}
             onClick={() => setOpen(false)}
           >
-            <Users size={18} />
+            <FileText size={18} />
             <span className="font-medium">Send PDF</span>
           </NavLink>
           <NavLink
@@ -331,18 +327,17 @@ export default function Sidebar() {
           <button
             type="button"
             onClick={handleExportAllData}
-            className={actionStyle}
+            className="btn btn-primary w-full justify-start"
           >
             <FileDown size={18} />
             <span className="font-medium">Export All Data</span>
           </button>
         </nav>
 
-        {/* Logout */}
-        <div className="p-3 border-t bg-white shrink-0 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
+        <div className="app-sidebar-footer pb-[calc(0.35rem+env(safe-area-inset-bottom))]">
           <button
             onClick={handleLogout}
-            className="w-full flex items-center gap-3 p-2.5 rounded-lg text-red-600 hover:bg-red-50 transition"
+            className="btn btn-secondary w-full justify-start"
           >
             <LogOut size={18} />
             <span className="font-medium">Logout</span>
