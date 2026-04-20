@@ -22,6 +22,7 @@ export default function SendGroupMessages() {
     selectedGroups,
     selectedBatches,
     selectedContacts,
+    selectedIndividualDetails,
     expandedGroups,
     search,
     setSearch,
@@ -81,16 +82,24 @@ export default function SendGroupMessages() {
     }
 
     try {
-      const response = await api.post("/campaigns/send", {
+      const response = await api.post("/whatsapp/queue/campaign", {
+        type: "text",
         text: text.trim(),
-        recipients,
+        contacts: recipients,
       });
 
       setShowGroupModal(false);
       
       const campaignId = response.data.campaignId;
-      await waitForCampaignCompletion(campaignId);
-      await showCampaignSummary(campaignId);
+      const finalCampaign = await waitForCampaignCompletion({
+        campaignId,
+        title: "Sending Messages...",
+        label: "Text campaign",
+      });
+
+      if (finalCampaign) {
+        await showCampaignSummary(finalCampaign, "Text Campaign");
+      }
       
       setText("");
       discardSelection();
@@ -100,7 +109,7 @@ export default function SendGroupMessages() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto py-8 px-4">
+    <div className="max-w-4xl mx-auto">
       <div className="flex items-center gap-3 mb-8">
         <div className="bg-emerald-500 p-2.5 rounded-2xl shadow-lg shadow-emerald-200">
           <Send className="text-white" size={24} />
@@ -166,6 +175,7 @@ export default function SendGroupMessages() {
         selectedGroups={selectedGroups}
         selectedBatches={selectedBatches}
         selectedContacts={selectedContacts}
+        selectedIndividualDetails={selectedIndividualDetails}
         expandedGroups={expandedGroups}
         search={search}
         setSearch={setSearch}

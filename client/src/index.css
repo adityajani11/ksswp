@@ -388,9 +388,14 @@ ul {
 }
 
 .btn-icon {
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+}
+
+.search-button {
   width: 2.75rem;
   height: 2.75rem;
-  padding: 0;
 }
 
 .chip {
@@ -796,6 +801,7 @@ ul {
   position: relative;
   min-height: 100vh;
   padding: 1rem;
+  padding-top: 5rem;
 }
 
 .app-sidebar-toggle {
@@ -810,14 +816,34 @@ ul {
   padding: 0.8rem;
   box-shadow: var(--app-shadow-soft);
   transition: all 220ms var(--app-ease);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.app-sidebar-toggle.is-sidebar-open {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.2);
+.app-sidebar-toggle:hover {
+  background: #ffffff;
+  transform: translateY(-1px);
+}
+
+.app-sidebar-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 14px;
   color: #ffffff;
-  backdrop-filter: blur(8px);
-  box-shadow: none;
+  cursor: pointer;
+  transition: all 180ms var(--app-ease);
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+}
+
+.app-sidebar-close:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
 }
 
 .app-sidebar-panel {
@@ -1107,6 +1133,11 @@ ul {
   .dashboard-main {
     margin-left: 18rem;
     padding: 1.5rem;
+    padding-top: 1.5rem;
+  }
+
+  .app-sidebar-toggle {
+    display: none;
   }
 
   .app-sidebar-panel {

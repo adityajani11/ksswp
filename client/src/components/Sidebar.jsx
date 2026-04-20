@@ -214,13 +214,15 @@ export default function Sidebar() {
 
   return (
     <>
-      <button
-        className={`app-sidebar-toggle custom-hamburger-button md:hidden ${open ? "is-sidebar-open" : ""}`}
-        onClick={() => setOpen(!open)}
-        aria-label={open ? "Close navigation menu" : "Open navigation menu"}
-      >
-        {open ? <X size={22} /> : <Menu size={22} />}
-      </button>
+      {!open && (
+        <button
+          className="app-sidebar-toggle custom-hamburger-button md:hidden"
+          onClick={() => setOpen(true)}
+          aria-label="Open navigation menu"
+        >
+          <Menu size={22} />
+        </button>
+      )}
 
       {open && (
         <div
@@ -230,6 +232,16 @@ export default function Sidebar() {
       )}
 
       <aside className={`app-sidebar-panel ${open ? "is-open" : ""}`}>
+        {open && (
+          <button
+            className="app-sidebar-close md:hidden"
+            onClick={() => setOpen(false)}
+            aria-label="Close navigation menu"
+          >
+            <X size={22} />
+          </button>
+        )}
+
         <div className="app-sidebar-brand">
           <span className="app-sidebar-kicker">
             <Shield size={14} />

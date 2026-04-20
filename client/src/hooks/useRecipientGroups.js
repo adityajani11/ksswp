@@ -175,6 +175,7 @@ export default function useRecipientGroups() {
   const [search, setSearch] = useState("");
   const [mobileSearch, setMobileSearch] = useState("");
   const [mobileSearchLoading, setMobileSearchLoading] = useState(false);
+  const [selectedIndividualContacts, setSelectedIndividualContacts] = useState([]);
 
   const groupsRef = useRef([]);
   const batchesRef = useRef([]);
@@ -183,6 +184,7 @@ export default function useRecipientGroups() {
   const selectedBatchesRef = useRef([]);
   const selectedContactsRef = useRef([]);
   const manuallyDeselectedRef = useRef([]);
+  const selectedIndividualContactsRef = useRef([]);
 
   const syncGroups = (nextGroups) => {
     groupsRef.current = nextGroups;
@@ -224,6 +226,12 @@ export default function useRecipientGroups() {
     manuallyDeselectedRef.current = nextManuallyDeselected;
     setManuallyDeselected(nextManuallyDeselected);
     return nextManuallyDeselected;
+  };
+
+  const syncSelectedIndividualContacts = (nextIndividual) => {
+    selectedIndividualContactsRef.current = nextIndividual;
+    setSelectedIndividualContacts(nextIndividual);
+    return nextIndividual;
   };
 
   const mergeAndStoreGroups = (incomingGroups, { useIncomingOrder = false } = {}) => {
@@ -310,12 +318,15 @@ export default function useRecipientGroups() {
   const recalculateSelectedContacts = (
     nextSelectedGroups = selectedGroupsRef.current,
     nextManuallyDeselected = manuallyDeselectedRef.current,
+    nextIndividual = selectedIndividualContactsRef.current,
   ) => {
-    const nextSelectedContacts = buildSelectedContacts(
+    const groupContacts = buildSelectedContacts(
       groupsRef.current,
       nextSelectedGroups,
       nextManuallyDeselected,
     );
+
+    const nextSelectedContacts = uniqueItems([...groupContacts, ...nextIndividual]);
     return syncSelectedContacts(nextSelectedContacts);
   };
 
@@ -379,6 +390,7 @@ export default function useRecipientGroups() {
     syncSelectedBatches([]);
     syncSelectedContacts([]);
     syncManuallyDeselected([]);
+    syncSelectedIndividualContacts([]);
     setExpandedGroups([]);
   };
 
@@ -448,15 +460,23 @@ export default function useRecipientGroups() {
   const toggleContact = (phone) => {
     const normalizedPhone = String(phone);
     const isSelected = selectedContactsRef.current.includes(normalizedPhone);
-    const nextSelectedContacts = isSelected
-      ? removeItem(selectedContactsRef.current, normalizedPhone)
-      : [...selectedContactsRef.current, normalizedPhone];
-    const nextManuallyDeselected = isSelected
-      ? [...manuallyDeselectedRef.current, normalizedPhone]
-      : removeItem(manuallyDeselectedRef.current, normalizedPhone);
 
-    syncSelectedContacts(nextSelectedContacts);
-    syncManuallyDeselected(nextManuallyDeselected);
+    let nextIndividual = selectedIndividualContactsRef.current;
+    let nextDeselected = manuallyDeselectedRef.current;
+
+    if (isSelected) {
+      // Deselecting: remove from individual and add to manually deselected
+      nextIndividual = removeItem(nextIndividual, normalizedPhone);
+      nextDeselected = uniqueItems([...nextDeselected, normalizedPhone]);
+    } else {
+      // Selecting: add to individual and remove from manually deselected
+      nextIndividual = uniqueItems([...nextIndividual, normalizedPhone]);
+      nextDeselected = removeItem(nextDeselected, normalizedPhone);
+    }
+
+    syncSelectedIndividualContacts(nextIndividual);
+    syncManuallyDeselected(nextDeselected);
+    recalculateSelectedContacts(undefined, nextDeselected, nextIndividual);
   };
 
   const selectAll = async () => {
@@ -531,6 +551,42 @@ export default function useRecipientGroups() {
     return buildMobileSearchMatches(groups, mobileSearch);
   }, [groups, mobileSearch]);
 
+  const selectedIndividualDetails = useMemo(() => {
+    if (!selectedIndividualContacts.length) return [];
+    // We can reuse buildMobileSearchMatches logic but without filtering by query,
+    // or just match from all contacts.
+    // actually, let's just use buildMobileSearchMatches with an empty logic or similar
+    const allMatches = buildMobileSearchMatches(groups, ""); // This is not efficient as it won't return anything if query is empty
+    // Let's implement a quick lookup
+    const details = [];
+    const phoneSet = new Set(selectedIndividualContacts);
+    
+    // We already have buildMobileSearchMatches, let's use it with a trick or just simple loop
+    for (const group of groups) {
+      if (!group.contacts) continue;
+      for (const contact of group.contacts) {
+        const phone = getContactPhoneValue(contact);
+        if (phone && phoneSet.has(phone)) {
+          const existing = details.find(d => d.phone === phone);
+          if (existing) {
+            if (group.name && !existing.groupNames.includes(group.name)) {
+              existing.groupNames.push(group.name);
+            }
+          } else {
+            details.push({
+              id: `sel-${phone}`,
+              phone,
+              displayPhone: toDisplayPhone(phone),
+              name: contact.name || "",
+              groupNames: group.name ? [group.name] : []
+            });
+          }
+        }
+      }
+    }
+    return details;
+  }, [groups, selectedIndividualContacts]);
+
   useEffect(() => {
     const queryDigits = String(mobileSearch || "").replace(/\D/g, "");
     if (!queryDigits) {
@@ -561,6 +617,7 @@ export default function useRecipientGroups() {
     selectedGroups,
     selectedBatches,
     selectedContacts,
+    selectedIndividualDetails,
     expandedGroups,
     search,
     setSearch,

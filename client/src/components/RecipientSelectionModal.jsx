@@ -1,8 +1,11 @@
+import { useEffect, useRef, useState } from "react";
 import {
   ChevronDown,
   ChevronRight,
   Layers3,
+  Phone,
   Search,
+  UserPlus,
   Users,
   X,
 } from "lucide-react";
@@ -24,6 +27,7 @@ export default function RecipientSelectionModal({
   selectedGroups,
   selectedBatches,
   selectedContacts,
+  selectedIndividualDetails = [],
   expandedGroups,
   search,
   setSearch,
@@ -37,6 +41,23 @@ export default function RecipientSelectionModal({
   toggleGroupExpand,
   selectAll,
 }) {
+  const [showMobileSearchPopup, setShowMobileSearchPopup] = useState(false);
+  const popupRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (popupRef.current && !popupRef.current.contains(event.target)) {
+        setShowMobileSearchPopup(false);
+      }
+    };
+    if (showMobileSearchPopup) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [showMobileSearchPopup]);
+
   if (!open) {
     return null;
   }
@@ -71,7 +92,7 @@ export default function RecipientSelectionModal({
         </div>
 
         <div className="app-modal-body recipient-modal-body">
-          <div className="app-search-grid">
+          <div className="app-search-grid" style={{ gridTemplateColumns: "1fr auto" }}>
             <label className="app-search-field">
               <Search size={16} />
               <input
@@ -82,83 +103,144 @@ export default function RecipientSelectionModal({
               />
             </label>
 
-            <label className="app-search-field">
-              <Search size={16} />
-              <input
-                value={mobileSearch}
-                onChange={(e) => setMobileSearch(e.target.value)}
-                placeholder="Search by mobile number..."
-                className="app-search-input"
-              />
-            </label>
+            <div className="relative" ref={popupRef}>
+              <button
+                type="button"
+                onClick={() => setShowMobileSearchPopup(!showMobileSearchPopup)}
+                className={`search-button btn btn-icon ${
+                  showMobileSearchPopup || mobileSearch.trim()
+                    ? "btn-primary"
+                    : "btn-secondary"
+                }`}
+                title="Search by mobile number"
+              >
+                <Phone size={18} />
+              </button>
+
+              {showMobileSearchPopup && (
+                <div
+                  className="absolute right-0 mt-2 w-80 z-50 overflow-hidden rounded-2xl border border-slate-200/60 shadow-2xl animate-in fade-in zoom-in duration-200"
+                  style={{
+                    background: "rgba(255, 255, 255, 0.85)",
+                    backdropFilter: "blur(16px) saturate(180%)",
+                  }}
+                >
+                  <div className="p-4 border-b border-slate-100/50 bg-white/50">
+                    <label className="app-search-field mb-0">
+                      <Search size={16} />
+                      <input
+                        autoFocus
+                        value={mobileSearch}
+                        onChange={(e) => setMobileSearch(e.target.value)}
+                        placeholder="Type mobile number..."
+                        className="app-search-input"
+                      />
+                    </label>
+                  </div>
+
+                  <div className="max-h-64 overflow-y-auto p-2">
+                    {mobileSearchLoading ? (
+                      <div className="flex flex-col items-center justify-center py-8 gap-2 text-slate-400">
+                        <Search size={20} className="animate-pulse" />
+                        <span className="text-xs font-medium">Searching...</span>
+                      </div>
+                    ) : !mobileSearch.trim() ? (
+                      <div className="p-2">
+                        <div className="py-2 text-center text-xs text-slate-400 font-medium">
+                          Enter a number to start searching
+                        </div>
+                        
+                        {selectedIndividualDetails.length > 0 && (
+                          <>
+                            <div className="my-2 border-t border-slate-100/60" />
+                            <div className="px-1 mb-2">
+                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                Selected ({selectedIndividualDetails.length})
+                              </span>
+                            </div>
+                            <div className="grid gap-1">
+                              {selectedIndividualDetails.map((match, idx) => {
+                                return (
+                                  <label
+                                    key={`sel-${match.phone}-${idx}`}
+                                    className="flex items-center gap-3 p-2.5 rounded-xl transition-all cursor-pointer border bg-emerald-50/40 border-emerald-100/30"
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={true}
+                                      onChange={() => toggleContact(match.phone)}
+                                      className="w-4 h-4 rounded-md border-slate-300 text-emerald-600 focus:ring-emerald-500/20"
+                                    />
+                                    <div className="min-w-0 flex-1">
+                                      <div className="text-sm font-bold truncate text-emerald-700">
+                                        {match.name || match.displayPhone}
+                                      </div>
+                                      {match.name && (
+                                        <div className="text-[10px] text-slate-400 font-medium leading-tight">
+                                          {match.displayPhone}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    ) : mobileSearchMatches.length === 0 ? (
+                      <div className="py-8 text-center text-xs text-slate-500 font-medium italic">
+                        No matches found
+                      </div>
+                    ) : (
+                      <div className="grid gap-1">
+                        {mobileSearchMatches.map((match, idx) => {
+                          const matchPhone = match.phone;
+                          const displayName = match.name || match.displayPhone || "Unnamed";
+                          const isSelected = selectedContacts.includes(matchPhone);
+
+                          return (
+                            <label
+                              key={match.id || `m-${matchPhone}-${idx}`}
+                              className={`flex items-center gap-3 p-2.5 rounded-xl transition-all cursor-pointer border ${
+                                isSelected
+                                  ? "bg-emerald-50 border-emerald-100/50"
+                                  : "hover:bg-slate-50 border-transparent"
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => toggleContact(matchPhone)}
+                                className="w-4 h-4 rounded-md border-slate-300 text-emerald-600 focus:ring-emerald-500/20"
+                              />
+                              <div className="min-w-0 flex-1">
+                                <div className={`text-sm font-bold truncate ${isSelected ? "text-emerald-700" : "text-slate-700"}`}>
+                                  {displayName}
+                                </div>
+                                {match.name && (
+                                  <div className="text-[10px] text-slate-400 font-medium leading-tight">
+                                    {match.displayPhone}
+                                  </div>
+                                )}
+                                {match.groupNames?.length ? (
+                                  <div className="text-[10px] text-slate-400 truncate leading-tight">
+                                    {match.groupNames[0]}
+                                    {match.groupNames.length > 1 && ` +${match.groupNames.length - 1} more`}
+                                  </div>
+                                ) : null}
+                              </div>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
-          {String(mobileSearch || "").trim() && (
-            <section className="recipient-section">
-              <div className="recipient-section-header">
-                <div className="recipient-title">
-                  <Search size={16} />
-                  Matching Numbers
-                </div>
-                <span className="chip chip-neutral">
-                  {mobileSearchMatches.length} results
-                </span>
-              </div>
-
-              <div
-                className="recipient-scroll recipient-scroll-matches"
-                style={{ flexShrink: 0 }}
-              >
-                {mobileSearchLoading ? (
-                  <div className="flex items-center justify-center h-full gap-2 text-slate-500 animate-pulse py-6">
-                    <Search size={18} />
-                    <span className="text-sm font-medium">Searching contacts...</span>
-                  </div>
-                ) : mobileSearchMatches.length === 0 ? (
-                  <div className="app-empty-state rounded-none border-0">
-                    No matching mobile numbers found.
-                  </div>
-                ) : (
-                  <div className="recipient-contact-grid recipient-match-grid">
-                    {mobileSearchMatches.map((match, idx) => {
-                      const matchPhone = match.phone;
-                      const displayName = match.name || match.displayPhone || "Unnamed";
-                      const subtitle = match.name ? match.displayPhone : "";
-
-                      return (
-                        <label
-                          key={match.id || `m-${matchPhone}-${idx}`}
-                          className="recipient-contact-pill cursor-pointer"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={selectedContacts.includes(matchPhone)}
-                            onChange={() => toggleContact(matchPhone)}
-                            disabled={!matchPhone}
-                          />
-                          <div className="min-w-0 flex-1">
-                            <span className="block truncate text-sm font-semibold text-slate-800">
-                              {displayName}
-                            </span>
-                            {subtitle && (
-                              <span className="block recipient-mini-note">
-                                {subtitle}
-                              </span>
-                            )}
-                            {match.groupNames?.length ? (
-                              <span className="block recipient-mini-note truncate">
-                                {match.groupNames.join(", ")}
-                              </span>
-                            ) : null}
-                          </div>
-                        </label>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </section>
-          )}
 
           <div className="flex flex-wrap gap-2">
             <button
