@@ -137,7 +137,7 @@ export default function SendGroupMessages() {
           </div>
         </div>
 
-        <div className="p-6 bg-slate-50/30 flex items-center justify-between">
+        <div className="p-6 bg-slate-50/30 footer-stack-mobile">
           <div className="flex items-center gap-2">
             <div className="flex -space-x-2">
               <div className="w-8 h-8 rounded-full bg-emerald-100 border-2 border-white flex items-center justify-center text-emerald-600 font-bold text-xs">A</div>

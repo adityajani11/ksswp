@@ -544,13 +544,17 @@ export default function Batches() {
             <div
               key={batch._id}
               className="relative app-card app-card-section transition-transform duration-200 hover:-translate-y-1"
+              style={{
+                zIndex:
+                  String(openMenuBatchId || "") === String(batch._id) ? 50 : 1,
+              }}
             >
               <button
                 type="button"
                 onClick={() => navigate(`/dashboard/batches/${batch._id}`)}
                 className="w-full text-left p-4 pr-14"
               >
-                <h4 className="text-lg font-semibold text-slate-900">
+                <h4 className="truncate text-lg font-semibold text-slate-900">
                   {batch.name}
                 </h4>
                 <div className="mt-2 flex flex-wrap items-center gap-2">

@@ -729,7 +729,7 @@ export default function Groups() {
               </button>
 
               <div className="space-y-3 pr-24">
-                <h4 className="text-lg font-semibold text-slate-900">
+                <h4 className="truncate text-lg font-semibold text-slate-900">
                   {group.name}
                 </h4>
                 <span className="chip chip-primary">
