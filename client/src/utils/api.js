@@ -1,6 +1,6 @@
 import axios from "axios";
 
-// Uncomment this for production -- route
+// Uncomment this for production -- route - backend
 const api = axios.create({
   baseURL: "/api",
 });
