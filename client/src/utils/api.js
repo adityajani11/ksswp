@@ -1,14 +1,14 @@
 import axios from "axios";
 
 // Uncomment this for production -- route
-// const api = axios.create({
-//   baseURL: "/api",
-// });
+const api = axios.create({
+  baseURL: "/api",
+});
 
 // Uncomment this for local development
-const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || "http://localhost:5000/api",
-});
+// const api = axios.create({
+//   baseURL: import.meta.env.VITE_API_URL || "http://localhost:5000/api",
+// });
 
 api.interceptors.request.use((req) => {
   const token = localStorage.getItem("token");
