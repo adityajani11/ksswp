@@ -1,125 +1,54 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Swal from "sweetalert2";
-import api from "../utils/api";
-import { Send, Image, FileText } from "lucide-react";
+import api, { getApiErrorMessage } from "../utils/api";
+import { Send } from "lucide-react";
+import {
+  showCampaignSummary,
+  waitForCampaignCompletion,
+} from "../utils/campaignProgress";
+import useRecipientGroups from "../hooks/useRecipientGroups";
+import RecipientSelectionModal from "../components/RecipientSelectionModal";
 
-export default function SendMessages() {
+export default function SendGroupMessages() {
   const [text, setText] = useState("");
-  const [media, setMedia] = useState(null);
-  const [doc, setDoc] = useState(null);
-  const [contacts, setContacts] = useState([]);
-  const [showContactModal, setShowContactModal] = useState(false);
-  const [selectedContacts, setSelectedContacts] = useState([]);
-  const [pendingType, setPendingType] = useState(null);
-  const [modalSearch, setModalSearch] = useState("");
-
-  useEffect(() => {
-    api.get("/contacts").then((res) => setContacts(res.data));
-  }, []);
-
-  const confirmSend = async (type) => {
-    setPendingType(type);
-
-    const choice = await Swal.fire({
-      title: "Send Message",
-      text: "Choose recipients",
-      icon: "question",
-      showCancelButton: true,
-      showDenyButton: true,
-      confirmButtonText: "Send to All",
-      denyButtonText: "Send to Specific",
-    });
-
-    if (choice.isConfirmed) {
-      sendToContacts(
-        contacts.map((c) => c.phone),
-        type
-      );
-    }
-
-    if (choice.isDenied) {
-      setSelectedContacts([]);
-      setShowContactModal(true);
-    }
-  };
-
-  const sendToContacts = async (numbers, type) => {
-    if (!numbers.length) {
-      Swal.fire("No contacts selected", "", "warning");
-      return;
-    }
-
-    const ok = await Swal.fire({
-      title: "Confirm Send?",
-      text: `Send message to ${numbers.length} contacts?`,
-      icon: "warning",
-      showCancelButton: true,
-    });
-
-    if (!ok.isConfirmed) return;
-
-    try {
-      for (const to of numbers) {
-        if (type === "text") {
-          await api.post("/whatsapp/template/text", { to, text });
-        }
-
-        if (type === "media") {
-          const form = new FormData();
-          form.append("to", to);
-          form.append("file", media);
-          await api.post("/whatsapp/template/image", form);
-        }
-
-        if (type === "doc") {
-          const form = new FormData();
-          form.append("to", to);
-          form.append("file", doc);
-          await api.post("/whatsapp/template/document", form);
-        }
-      }
-
-      Swal.fire("Sent!", "Messages sent successfully", "success");
-      // CLEAR INPUTS AFTER SUCCESS
-      if (type === "text") {
-        setText("");
-      }
-
-      if (type === "media") {
-        setMedia(null);
-      }
-
-      if (type === "doc") {
-        setDoc(null);
-      }
-
-      // Optional: clear selections
-      setSelectedContacts([]);
-      setModalSearch("");
-    } catch (err) {
-      Swal.fire("Error", "Failed to send messages", "error");
-    }
-  };
-
-  const filteredModalContacts = contacts.filter((c) => {
-    const q = modalSearch.toLowerCase();
-    return (
-      c.name.toLowerCase().includes(q) || c.phone.toLowerCase().includes(q)
-    );
-  });
+  const [showGroupModal, setShowGroupModal] = useState(false);
+  const {
+    groups,
+    batches,
+    groupsLoading,
+    batchesLoading,
+    mobileSearchMatches,
+    selectionLoading,
+    selectedGroups,
+    selectedBatches,
+    selectedContacts,
+    selectedIndividualDetails,
+    expandedGroups,
+    search,
+    setSearch,
+    mobileSearch,
+    setMobileSearch,
+    mobileSearchLoading,
+    ensureSelectionOptionsLoaded,
+    buildRecipientPayload,
+    discardSelection,
+    isGroupLoading,
+    toggleContact,
+    toggleGroup,
+    toggleBatch,
+    toggleGroupExpand,
+    selectAll,
+  } = useRecipientGroups();
 
   const handleTextChange = (e) => {
     let value = e.target.value;
-
     let violated = false;
 
-    // Remove new lines
     if (value.includes("\n") || value.includes("\r")) {
       value = value.replace(/[\r\n]+/g, " ");
       violated = true;
     }
 
-    // Replace multiple spaces with single space
     if (/\s{2,}/.test(value)) {
       value = value.replace(/\s{2,}/g, " ");
       violated = true;
@@ -129,221 +58,137 @@ export default function SendMessages() {
       Swal.fire({
         icon: "info",
         title: "Formatting not allowed",
-        text: "New lines or multiple spaces are not allowed in WhatsApp messages.",
-        timer: 1800,
+        text: "WhatsApp allows only single-line messages with single spaces.",
+        timer: 1600,
         showConfirmButton: false,
+        toast: true,
+        position: "top-end",
       });
     }
 
     setText(value);
   };
 
-  const handleTextKeyDown = (e) => {
-    // Block Enter key
-    if (e.key === "Enter") {
-      e.preventDefault();
-
-      Swal.fire({
-        icon: "info",
-        title: "Single-line message only",
-        text: "WhatsApp does not allow new lines. Please write the message in a single line.",
-        timer: 2000,
-        showConfirmButton: false,
-      });
+  const sendMessages = async () => {
+    if (!text.trim()) {
+      Swal.fire("Error", "Please enter a message", "error");
+      return;
     }
 
-    // Block consecutive spaces via keyboard
-    if (e.key === " " && text.endsWith(" ")) {
-      e.preventDefault();
+    const recipients = await buildRecipientPayload();
+    if (!recipients || !recipients.length) {
+      Swal.fire("Error", "Please select recipients", "error");
+      return;
+    }
 
-      Swal.fire({
-        icon: "info",
-        title: "Extra spaces not allowed",
-        text: "Multiple consecutive spaces are not allowed.",
-        timer: 1500,
-        showConfirmButton: false,
+    try {
+      const response = await api.post("/whatsapp/queue/campaign", {
+        type: "text",
+        text: text.trim(),
+        contacts: recipients,
       });
+
+      setShowGroupModal(false);
+      
+      const campaignId = response.data.campaignId;
+      const finalCampaign = await waitForCampaignCompletion({
+        campaignId,
+        title: "Sending Messages...",
+        label: "Text campaign",
+      });
+
+      if (finalCampaign) {
+        await showCampaignSummary(finalCampaign, "Text Campaign");
+      }
+      
+      setText("");
+      discardSelection();
+    } catch (err) {
+      Swal.fire("Error", getApiErrorMessage(err, "Failed to start campaign"), "error");
     }
   };
 
   return (
-    <div className="max-w-6xl space-y-6 mx-auto">
-      {/* TEXT MESSAGE */}
-      <div className="bg-white border rounded-xl p-5 space-y-3 shadow-sm">
-        <div className="flex items-center gap-2 text-gray-700 font-medium">
-          <Send size={18} />
-          Text Message
+    <div className="max-w-4xl mx-auto">
+      <div className="flex items-center gap-3 mb-8">
+        <div className="bg-emerald-500 p-2.5 rounded-2xl shadow-lg shadow-emerald-200">
+          <Send className="text-white" size={24} />
         </div>
-
-        <textarea
-          className="w-full p-3 border rounded-lg resize-none focus:ring focus:outline-none"
-          rows={4}
-          placeholder="Type your message here..."
-          value={text}
-          onKeyDown={handleTextKeyDown}
-          onChange={handleTextChange}
-          maxLength={700}
-        />
-
-        <div className="text-right">
-          <button
-            disabled={!text}
-            onClick={() => confirmSend("text")}
-            className="btn disabled:opacity-50 cursor-pointer"
-          >
-            Send Text
-          </button>
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800">Send Messages</h1>
+          <p className="text-slate-500">Compose and broadcast to your contacts</p>
         </div>
       </div>
 
-      {/* MEDIA MESSAGE */}
-      {/* <div className="bg-white border rounded-xl p-5 space-y-3 shadow-sm">
-        <div className="flex items-center gap-2 text-gray-700 font-medium">
-          <Image size={18} />
-          Photo / Video
-        </div>
-
-        <input
-          type="file"
-          accept="image/*,video/*"
-          onChange={(e) => setMedia(e.target.files[0])}
-          className="block w-full text-sm"
-        />
-
-        <div className="text-right">
-          <button
-            disabled={!media}
-            onClick={() => confirmSend("media")}
-            className="btn disabled:opacity-50 cursor-pointer"
-          >
-            Send Media
-          </button>
-        </div>
-      </div> */}
-
-      {/* DOCUMENT MESSAGE */}
-      {/* <div className="bg-white border rounded-xl p-5 space-y-3 shadow-sm">
-        <div className="flex items-center gap-2 text-gray-700 font-medium">
-          <FileText size={18} />
-          Document
-        </div>
-
-        <input
-          type="file"
-          accept=".pdf,.doc,.docx"
-          onChange={(e) => setDoc(e.target.files[0])}
-          className="block w-full text-sm"
-        />
-
-        <div className="text-right">
-          <button
-            disabled={!doc}
-            onClick={() => confirmSend("doc")}
-            className="btn disabled:opacity-50 cursor-pointer"
-          >
-            Send Document
-          </button>
-        </div>
-      </div> */}
-      {showContactModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white w-full max-w-lg rounded-xl p-5 shadow-lg">
-            <h3 className="text-lg font-semibold mb-3 flex justify-between">
-              Select Contacts
-              {selectedContacts.length > 0 && (
-                <span className="px-2 py-2 text-xs rounded-full bg-blue-100 text-blue-700 font-medium">
-                  {selectedContacts.length} selected
-                </span>
-              )}
-            </h3>
-
-            <input
-              type="text"
-              placeholder="Search contacts..."
-              value={modalSearch}
-              onChange={(e) => setModalSearch(e.target.value)}
-              className="w-full mb-3 p-2.5 border rounded-lg focus:outline-none focus:ring focus:ring-blue-500"
-            />
-
-            {/* Select All */}
-            <div className="flex items-center gap-2 mb-3">
-              <input
-                type="checkbox"
-                checked={
-                  filteredModalContacts.length > 0 &&
-                  filteredModalContacts.every((c) =>
-                    selectedContacts.includes(c.phone)
-                  )
-                }
-                onChange={(e) =>
-                  setSelectedContacts(
-                    e.target.checked
-                      ? filteredModalContacts.map((c) => c.phone)
-                      : selectedContacts.filter(
-                          (p) =>
-                            !filteredModalContacts.some((c) => c.phone === p)
-                        )
-                  )
-                }
-              />
-              <span>Select / Deselect All</span>
-            </div>
-
-            {/* Contact List */}
-            <div className="max-h-64 overflow-y-auto border rounded p-3">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {filteredModalContacts.map((c) => (
-                  <label
-                    key={c._id}
-                    className="flex items-start gap-2 text-sm p-2 rounded hover:bg-gray-50 cursor-pointer"
-                  >
-                    <input
-                      type="checkbox"
-                      className="mt-1"
-                      checked={selectedContacts.includes(c.phone)}
-                      onChange={(e) => {
-                        setSelectedContacts((prev) =>
-                          e.target.checked
-                            ? [...prev, c.phone]
-                            : prev.filter((p) => p !== c.phone)
-                        );
-                      }}
-                    />
-                    <span className="leading-tight">
-                      <span className="block font-medium text-gray-800">
-                        {c.name}
-                      </span>
-                      <span className="block text-gray-500 text-xs">
-                        {c.phone}
-                      </span>
-                    </span>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            {/* Actions */}
-            <div className="flex justify-end gap-2 mt-4">
-              <button
-                className="px-4 py-2 border rounded"
-                onClick={() => setShowContactModal(false)}
-              >
-                Cancel
-              </button>
-              <button
-                className="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50"
-                disabled={!selectedContacts.length}
-                onClick={() => {
-                  setShowContactModal(false);
-                  sendToContacts(selectedContacts, pendingType);
-                }}
-              >
-                Send
-              </button>
-            </div>
+      <section className="bg-white rounded-3xl shadow-xl shadow-slate-200/60 border border-slate-100 overflow-hidden">
+        <div className="p-6 border-bottom border-slate-100 bg-slate-50/50">
+          <label className="block text-sm font-semibold text-slate-700 mb-2">
+            Message Compose
+          </label>
+          <textarea
+            value={text}
+            onChange={handleTextChange}
+            placeholder="Type your WhatsApp message here..."
+            className="w-full h-40 p-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-50/50 focus:border-emerald-500 transition-all resize-none text-slate-700 placeholder:text-slate-400"
+          />
+          <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
+            <span>Only single line and single spaces are allowed.</span>
+            <span>{text.length} characters</span>
           </div>
         </div>
-      )}
+
+        <div className="p-6 bg-slate-50/30 footer-stack-mobile">
+          <div className="flex items-center gap-2">
+            <div className="flex -space-x-2">
+              <div className="w-8 h-8 rounded-full bg-emerald-100 border-2 border-white flex items-center justify-center text-emerald-600 font-bold text-xs">A</div>
+              <div className="w-8 h-8 rounded-full bg-blue-100 border-2 border-white flex items-center justify-center text-blue-600 font-bold text-xs">B</div>
+              <div className="w-8 h-8 rounded-full bg-slate-100 border-2 border-white flex items-center justify-center text-slate-400 font-bold text-xs">+</div>
+            </div>
+            <span className="text-sm font-medium text-slate-600">
+              {selectedContacts.length} recipients selected
+            </span>
+          </div>
+          <button
+            onClick={() => {
+              ensureSelectionOptionsLoaded();
+              setShowGroupModal(true);
+            }}
+            className="btn btn-primary px-6 py-2.5 rounded-xl flex items-center gap-2"
+          >
+            Select Recipients
+          </button>
+        </div>
+      </section>
+
+      <RecipientSelectionModal
+        open={showGroupModal}
+        onClose={() => setShowGroupModal(false)}
+        onSubmit={sendMessages}
+        submitLabel="Send Text"
+        groups={groups}
+        batches={batches}
+        groupsLoading={groupsLoading}
+        batchesLoading={batchesLoading}
+        mobileSearchLoading={mobileSearchLoading}
+        mobileSearchMatches={mobileSearchMatches}
+        selectionLoading={selectionLoading}
+        selectedGroups={selectedGroups}
+        selectedBatches={selectedBatches}
+        selectedContacts={selectedContacts}
+        selectedIndividualDetails={selectedIndividualDetails}
+        expandedGroups={expandedGroups}
+        search={search}
+        setSearch={setSearch}
+        mobileSearch={mobileSearch}
+        setMobileSearch={setMobileSearch}
+        discardSelection={discardSelection}
+        isGroupLoading={isGroupLoading}
+        toggleContact={toggleContact}
+        toggleGroup={toggleGroup}
+        toggleBatch={toggleBatch}
+        toggleGroupExpand={toggleGroupExpand}
+        selectAll={selectAll}
+      />
     </div>
   );
 }

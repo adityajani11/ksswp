@@ -1,6 +1,7 @@
 import { useState } from "react";
 import Swal from "sweetalert2";
 import api from "../utils/api";
+import { runWithSwalLoader } from "../utils/swalLoading";
 
 export default function Login({ onLogin }) {
   const [username, setUsername] = useState("");
@@ -18,10 +19,17 @@ export default function Login({ onLogin }) {
     try {
       setLoading(true);
 
-      const res = await api.post("/auth/login", {
-        username,
-        password,
-      });
+      const res = await runWithSwalLoader(
+        {
+          title: "Logging in",
+          text: "Checking your credentials...",
+        },
+        () =>
+          api.post("/auth/login", {
+            username,
+            password,
+          }),
+      );
 
       const token = res.data.token;
       onLogin(token);
@@ -44,36 +52,42 @@ export default function Login({ onLogin }) {
   };
 
   return (
-    <div className="w-full max-w-md bg-white p-6 rounded-lg shadow-md">
-      <h3 className="text-2xl font-bold text-center mb-6">
-        Whatsapp Panel Login
-      </h3>
+    <div className="auth-form-card">
+      <div className="space-y-2">
+        <h3>Welcome back</h3>
+        <p>Sign in to continue managing contacts, campaigns, and settings.</p>
+      </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Username */}
-        <input
-          type="text"
-          placeholder="Username"
-          className="w-full p-3 border rounded focus:outline-none focus:ring"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-        />
+        <div className="space-y-2">
+          <label className="block text-sm font-medium text-slate-700" htmlFor="username">
+            Username
+          </label>
+          <input
+            id="username"
+            type="text"
+            placeholder="Enter username"
+            className="app-field"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+          />
+        </div>
 
-        {/* Password */}
-        <input
-          type="password"
-          placeholder="Password"
-          className="w-full p-3 border rounded focus:outline-none focus:ring my-2"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
+        <div className="space-y-2">
+          <label className="block text-sm font-medium text-slate-700" htmlFor="password">
+            Password
+          </label>
+          <input
+            id="password"
+            type="password"
+            placeholder="Enter password"
+            className="app-field"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+        </div>
 
-        {/* Submit */}
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full bg-blue-600 text-white p-2 mx-auto rounded hover:bg-blue-700 disabled:opacity-50"
-        >
+        <button type="submit" disabled={loading} className="btn btn-primary w-full">
           {loading ? "Logging in..." : "Login"}
         </button>
       </form>

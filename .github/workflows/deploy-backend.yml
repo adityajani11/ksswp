@@ -12,7 +12,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5 # ✅ updated
 
       - name: Deploy to EC2 via SSH
         uses: appleboy/ssh-action@v1.0.3
@@ -22,23 +22,25 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             set -e
-            cd /home/ubuntu/app || exit 1
+
+            cd /home/ubuntu/app
 
             echo "Pulling latest code..."
             if [ ! -d ".git" ]; then
               git clone https://github.com/adityajani11/ksswp.git .
             else
-              git pull origin main
+              git fetch origin
+              git reset --hard origin/main
             fi
 
             cd server
 
             echo "Installing backend dependencies..."
-            npm install --production
+            npm ci   # ✅ faster + consistent install
 
             echo "Starting / Restarting backend with PM2..."
-            pm2 describe api > /dev/null \
-              && pm2 restart api \
-              || pm2 start npm --name api -- start
+            pm2 describe kss-backend > /dev/null \
+              && pm2 restart kss-backend \
+              || pm2 start index.js --name kss-backend
 
             pm2 save

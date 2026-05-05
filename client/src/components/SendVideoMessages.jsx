@@ -1,0 +1,299 @@
+import { useRef, useState } from "react";
+import Swal from "sweetalert2";
+import api, { getApiErrorMessage } from "../utils/api";
+import { Video } from "lucide-react";
+import {
+  showCampaignSummary,
+  waitForCampaignCompletion,
+} from "../utils/campaignProgress";
+import useRecipientGroups from "../hooks/useRecipientGroups";
+import RecipientSelectionModal from "./RecipientSelectionModal";
+
+export default function SendVideoMessages() {
+  const [caption, setCaption] = useState("");
+  const [videoFile, setVideoFile] = useState(null);
+  const [showGroupModal, setShowGroupModal] = useState(false);
+  const {
+    groups,
+    batches,
+    groupsLoading,
+    batchesLoading,
+    mobileSearchMatches,
+    selectionLoading,
+    selectedGroups,
+    selectedBatches,
+    selectedContacts,
+    expandedGroups,
+    search,
+    setSearch,
+    mobileSearch,
+    setMobileSearch,
+    ensureSelectionOptionsLoaded,
+    buildRecipientPayload,
+    discardSelection,
+    isGroupLoading,
+    toggleContact,
+    toggleGroup,
+    toggleBatch,
+    toggleGroupExpand,
+    selectAll,
+  } = useRecipientGroups();
+
+  const fileInputRef = useRef(null);
+
+  const handleCaptionChange = (e) => {
+    let value = e.target.value;
+    let violated = false;
+
+    value = value.replace(/[\r\n]+/g, " ");
+    value = value.replace(/\s{2,}/g, " ");
+
+    if (value.length > 500) {
+      value = value.slice(0, 500);
+      violated = true;
+    }
+
+    if (violated) {
+      Swal.fire({
+        icon: "info",
+        title: "Formatting not allowed",
+        text: "Single-line text only (max 500 chars).",
+        timer: 1600,
+        showConfirmButton: false,
+      });
+    }
+
+    setCaption(value);
+  };
+
+  const handleCaptionKeyDown = (e) => {
+    if (e.key === "Enter") e.preventDefault();
+    if (e.key === " " && caption.endsWith(" ")) e.preventDefault();
+  };
+
+  const handleVideoSelect = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const allowedTypes = ["video/mp4", "video/quicktime"];
+
+    if (!allowedTypes.includes(file.type)) {
+      Swal.fire("Invalid file", "Only MP4 or MOV allowed", "error");
+      return;
+    }
+
+    if (file.size > 16 * 1024 * 1024) {
+      Swal.fire("Too large", "Max video size is 16MB", "error");
+      return;
+    }
+
+    setVideoFile(file);
+  };
+
+  const uploadVideoToS3 = async () => {
+    const res = await api.post("/upload/signed-url", {
+      fileName: videoFile.name,
+      contentType: videoFile.type,
+      category: "video",
+    });
+
+    const { uploadUrl, publicUrl } = res.data;
+
+    const uploadRes = await fetch(uploadUrl, {
+      method: "PUT",
+      body: videoFile,
+    });
+
+    if (!uploadRes.ok) {
+      throw new Error(`S3 upload failed with status ${uploadRes.status}`);
+    }
+
+    return publicUrl;
+  };
+
+  const openGroupSelection = async () => {
+    if (!caption.trim() || !videoFile) {
+      Swal.fire("Required", "Video and caption are required", "warning");
+      return;
+    }
+
+    discardSelection();
+    setSearch("");
+    setMobileSearch("");
+    setShowGroupModal(true);
+
+    const nextGroups = await ensureSelectionOptionsLoaded();
+    if (!nextGroups) {
+      setShowGroupModal(false);
+    }
+  };
+
+  const sendVideoMessages = async () => {
+    if (!selectedContacts.length) {
+      Swal.fire("No contacts", "Select at least one contact", "warning");
+      return;
+    }
+
+    const recipientsPayload = await buildRecipientPayload();
+    if (!recipientsPayload?.length) {
+      return;
+    }
+
+    const confirm = await Swal.fire({
+      title: "Confirm Send?",
+      html: `<p>Send video to <strong>${recipientsPayload.length}</strong> contact(s)</p>`,
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonText: "Yes, Send",
+    });
+
+    if (!confirm.isConfirmed) return;
+
+    Swal.fire({
+      title: "Uploading & Sending...",
+      allowOutsideClick: false,
+      didOpen: () => Swal.showLoading(),
+    });
+
+    let uploadedUrl;
+
+    try {
+      uploadedUrl = await uploadVideoToS3();
+    } catch (err) {
+      console.error("UPLOAD ERROR:", err);
+      Swal.fire("Error", "Video upload failed", "error");
+      return;
+    }
+
+    try {
+      const res = await api.post("/whatsapp/queue/campaign", {
+        type: "video",
+        text: caption,
+        contacts: recipientsPayload,
+        link: uploadedUrl,
+        mediaMimeType: videoFile?.type,
+        mediaFileName: videoFile?.name,
+      });
+
+      let finalCampaign = null;
+      try {
+        finalCampaign = await waitForCampaignCompletion({
+          campaignId: res.data.campaignId,
+          title: "Sending Video Messages...",
+          label: "Video campaign",
+        });
+      } catch (trackErr) {
+        console.error("Campaign progress tracking failed:", trackErr);
+      }
+
+      if (finalCampaign) {
+        await showCampaignSummary(finalCampaign, "Video Campaign");
+      } else {
+        Swal.fire(
+          "Queued",
+          `Video campaign queued for ${res.data.totalRecipients} contact(s).\nID: ${res.data.campaignId}`,
+          "info",
+        );
+      }
+    } catch (err) {
+      Swal.fire(
+        "Error",
+        getApiErrorMessage(err, "Failed to queue video campaign"),
+        "error",
+      );
+      return;
+    }
+
+    setCaption("");
+    setVideoFile(null);
+    discardSelection();
+    setShowGroupModal(false);
+
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  return (
+    <div className="app-page app-page-compact">
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Send Video Message</h1>
+        </div>
+
+        <span className="chip chip-neutral">
+          {videoFile ? videoFile.name : "No video selected"}
+        </span>
+      </div>
+
+      <section className="app-card app-card-section space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="rounded-2xl bg-sky-50 p-3 text-sky-700">
+            <Video size={20} />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900">
+              Video composer
+            </h2>
+            <p className="text-sm text-slate-500">
+              Accepted formats: MP4 and MOV up to 16 MB.
+            </p>
+          </div>
+        </div>
+
+        <textarea
+          value={caption}
+          onChange={handleCaptionChange}
+          onKeyDown={handleCaptionKeyDown}
+          rows={3}
+          maxLength={500}
+          placeholder="Message (max 500 chars)"
+          className="app-textarea min-h-[10rem]"
+        />
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".mp4,.mov"
+          onChange={handleVideoSelect}
+        />
+
+        <div className="flex justify-end mt-3">
+          <button
+            onClick={openGroupSelection}
+            disabled={!caption || !videoFile}
+            className="btn btn-primary"
+          >
+            Send Video
+          </button>
+        </div>
+      </section>
+
+      <RecipientSelectionModal
+        open={showGroupModal}
+        onClose={() => setShowGroupModal(false)}
+        onSubmit={sendVideoMessages}
+        submitLabel="Send Video"
+        groups={groups}
+        batches={batches}
+        groupsLoading={groupsLoading}
+        batchesLoading={batchesLoading}
+        mobileSearchMatches={mobileSearchMatches}
+        selectionLoading={selectionLoading}
+        selectedGroups={selectedGroups}
+        selectedBatches={selectedBatches}
+        selectedContacts={selectedContacts}
+        expandedGroups={expandedGroups}
+        search={search}
+        setSearch={setSearch}
+        mobileSearch={mobileSearch}
+        setMobileSearch={setMobileSearch}
+        discardSelection={discardSelection}
+        isGroupLoading={isGroupLoading}
+        toggleContact={toggleContact}
+        toggleGroup={toggleGroup}
+        toggleBatch={toggleBatch}
+        toggleGroupExpand={toggleGroupExpand}
+        selectAll={selectAll}
+      />
+    </div>
+  );
+}
