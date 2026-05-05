@@ -1,6 +1,7 @@
 import axios from "axios";
 
-// Uncomment this for production -- route
+// Uncomment this for production
+// Note: The baseURL is set to "/api" which assumes that the client and server are served from the same origin.
 const api = axios.create({
   baseURL: "/api",
 });
