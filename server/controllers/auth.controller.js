@@ -2,12 +2,17 @@ const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
 const axios = require("axios");
 const User = require("../models/User");
-const { saveOtpDb, verifyOtpDb, normalizePhone } = require("../utils/otpDbStore");
+const {
+  saveOtpDb,
+  verifyOtpDb,
+  normalizePhone,
+} = require("../utils/otpDbStore");
 const {
   PASSWORD_SCHEMA_VERSION,
   DEFAULT_ADMIN_CONTACT_NUMBER,
 } = require("../utils/passwordMigration");
 
+// OTP purposes for different credential actions
 const OTP_PURPOSES = {
   CHANGE_USERNAME: "CHANGE_USERNAME",
   CHANGE_LOGIN_PASSWORD: "CHANGE_LOGIN_PASSWORD",
@@ -24,7 +29,9 @@ function generateOtp() {
 }
 
 function maskPhone(phone) {
-  const normalizedPhone = normalizeAdminContactNumber(phone, { allowEmpty: true });
+  const normalizedPhone = normalizeAdminContactNumber(phone, {
+    allowEmpty: true,
+  });
   if (!normalizedPhone) {
     return "";
   }
@@ -57,7 +64,9 @@ function normalizeAdminContactNumber(contactNumber, options = {}) {
 }
 
 function formatDisplayPhone(phone) {
-  const normalizedPhone = normalizeAdminContactNumber(phone, { allowEmpty: true });
+  const normalizedPhone = normalizeAdminContactNumber(phone, {
+    allowEmpty: true,
+  });
   return normalizedPhone ? `+${normalizedPhone}` : "";
 }
 
@@ -207,7 +216,8 @@ exports.register = async (req, res) => {
     const normalizedContactNumber =
       normalizeAdminContactNumber(contactNumber, { allowEmpty: false }) ||
       normalizeAdminContactNumber(
-        process.env.DEFAULT_ADMIN_CONTACT_NUMBER || DEFAULT_ADMIN_CONTACT_NUMBER,
+        process.env.DEFAULT_ADMIN_CONTACT_NUMBER ||
+          DEFAULT_ADMIN_CONTACT_NUMBER,
         { allowEmpty: false },
       );
 
@@ -255,7 +265,8 @@ exports.login = async (req, res) => {
 
     if (user.isActive === false) {
       return res.status(403).json({
-        message: "Your account has been deactivated. Please contact the administrator.",
+        message:
+          "Your account has been deactivated. Please contact the administrator.",
       });
     }
 
@@ -499,7 +510,8 @@ exports.verifyOtpAndChangeLoginPassword = async (req, res) => {
     const isSameAsCurrent = await bcrypt.compare(newPassword, user.password);
     if (isSameAsCurrent) {
       return res.status(400).json({
-        message: "New login password must be different from current login password",
+        message:
+          "New login password must be different from current login password",
       });
     }
 
@@ -633,7 +645,8 @@ exports.verifyOtpAndChangeContactNumber = async (req, res) => {
 
     if (normalizedContactNumber === oldContactNumber) {
       return res.status(400).json({
-        message: "New contact number must be different from current contact number",
+        message:
+          "New contact number must be different from current contact number",
       });
     }
 

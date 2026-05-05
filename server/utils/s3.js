@@ -9,6 +9,7 @@ const s3 = new S3Client({
   },
 });
 
+// Bucket
 const BUCKET = process.env.AWS_S3_BUCKET;
 
 exports.getSignedUploadUrl = async ({ key, contentType }) => {
